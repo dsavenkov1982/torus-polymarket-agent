@@ -1,28 +1,42 @@
-# main.py
+#!/usr/bin/env python3
 """
-Pure MCP server entry point - no HTTP/FastAPI, just MCP protocol.
+Clean MCP server for Polymarket data.
+Runs as pure MCP server without any print statements or HTTP components.
 """
 
-import asyncio
+import logging
+import sys
 from agent.mcp_server import polymarket_mcp
-from agent.data_fetcher import PolymarketService
 
 
-async def run_mcp_server():
-    """Run the pure MCP server."""
-    print("🚀 Starting Polymarket MCP Server (Pure MCP Protocol)")
-    print("Available tools:", list(polymarket_mcp._tools.keys()) if hasattr(polymarket_mcp, '_tools') else "Unknown")
-    print("Available resources:",
-          list(polymarket_mcp._resources.keys()) if hasattr(polymarket_mcp, '_resources') else "Unknown")
-    print("Ready for MCP connections...")
+def setup_logging():
+    """Configure logging to file only (not stdout)."""
+    logging.basicConfig(
+        level=logging.INFO,
+        filename='polymarket_mcp.log',
+        filemode='a',
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    return logging.getLogger(__name__)
 
-    # Keep server running
+
+def main():
+    """Main entry point for the MCP server."""
+    logger = setup_logging()
+
     try:
-        while True:
-            await asyncio.sleep(1)
+        logger.info("Starting Polymarket MCP Server")
+
+        # FastMCP.run() manages its own event loop - call it directly
+        polymarket_mcp.run()
+
     except KeyboardInterrupt:
-        print("\n👋 Shutting down MCP server...")
+        logger.info("Server stopped by user")
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"Server error: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    asyncio.run(run_mcp_server())
+    main()

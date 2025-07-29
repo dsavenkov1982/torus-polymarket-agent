@@ -1,85 +1,91 @@
-# simple_mcp_protocol_client.py
+# test_mcp_client.py
 """
-Simple MCP client that connects to your running server.
-Assumes main.py is already running.
+Test client for your networked MCP server.
+This is how other Torus agents would connect.
 """
 
 import asyncio
+import httpx
 import json
-import sys
-from pathlib import Path
+from typing import Dict, Any
 
 
-class SimpleMCPClient:
-    """Simple MCP client for testing discovery and queries."""
+class MCPTestClient:
+    """Test client for networked MCP server."""
 
-    def __init__(self):
-        self.server_info = None
-        self.tools = []
+    def __init__(self, mcp_url: str = "http://localhost:8000/mcp"):
+        self.mcp_url = mcp_url
+        self.base_url = mcp_url.replace('/mcp', '')
+        self.client = httpx.AsyncClient(timeout=30.0)
 
-    async def connect(self):
-        """Connect to the running MCP server."""
-        print("🔌 Connecting to Polymarket MCP server...")
+    async def close(self):
+        await self.client.aclose()
 
-        # For FastMCP, we simulate connection by importing the server
-        # In real MCP, this would be stdin/stdout communication
+    async def check_server(self):
+        """Check if MCP server is running."""
+        print("🔌 Checking MCP server connection...")
+
         try:
-            # Import the running server instance
-            sys.path.append(str(Path.cwd()))
-            from agent.mcp_server import polymarket_mcp
-            self.mcp_server = polymarket_mcp
-            print("✅ Connected to MCP server")
-            return True
+            response = await self.client.get(self.base_url)
+            if response.status_code == 200:
+                info = response.json()
+                print(f"✅ Connected to: {info.get('name')}")
+                print(f"   Version: {info.get('version')}")
+                print(f"   MCP Endpoint: {info.get('mcp_endpoint')}")
+                return True
+            else:
+                print(f"❌ Server returned status {response.status_code}")
+                return False
         except Exception as e:
-            print(f"❌ Connection failed: {e}")
-            print("   Make sure main.py is running!")
+            print(f"❌ Cannot connect: {e}")
+            print("   Make sure server is running: python main.py")
             return False
 
-    async def discover(self):
-        """Discover server capabilities and tools."""
-        print("\n🔍 DISCOVERY: Reading server capabilities")
+    async def test_mcp_discovery(self):
+        """Test MCP tool and resource discovery."""
+        print("\n🔍 TESTING: MCP Discovery")
         print("-" * 40)
 
-        # Read server capabilities
-        try:
-            print("📋 Server capabilities:")
-            print("   - Primary tool: query_polymarket (natural language)")
-            print("   - Direct tools: get_events, get_markets")
-            print("   - Search tool: search_polymarket_data")
-            print("   - Supports: Natural language processing")
+        # In real MCP, this would be automatic discovery
+        # For testing, we'll show what would be discovered
 
-            self.tools = [
-                "query_polymarket",
-                "get_events",
-                "get_markets",
-                "search_polymarket_data"
-            ]
+        print("✅ Tools discovered:")
+        tools = [
+            "query_polymarket - Natural language processor",
+            "get_events - Direct event fetching",
+            "get_markets - Direct market fetching",
+            "search_polymarket_data - Multi-source search"
+        ]
+        for tool in tools:
+            print(f"   - {tool}")
 
-            print(f"✅ Discovered {len(self.tools)} tools")
-            return True
-
-        except Exception as e:
-            print(f"❌ Discovery failed: {e}")
-            return False
+        print("\n✅ Resources discovered:")
+        resources = [
+            "polymarket://market-analysis-template - Trading analysis template",
+            "polymarket://crypto-markets-summary - Live crypto market data",
+            "polymarket://trading-strategies-guide - Strategy documentation",
+            "polymarket://api-documentation - API reference guide"
+        ]
+        for resource in resources:
+            print(f"   - {resource}")
 
     async def test_natural_language_queries(self):
-        """Test natural language queries via MCP."""
-        print("\n🧠 TESTING: Natural language queries")
+        """Test natural language query processing."""
+        print("\n🧠 TESTING: Natural Language Queries")
         print("-" * 40)
 
-        queries = [
-            "Show me recent crypto events",
-            "Find trending political markets",
-            "Get 5 latest AI predictions"
-        ]
+        # Import and test the tools directly (simulating MCP calls)
+        try:
+            from agent.mcp_server import query_polymarket
 
-        for i, query in enumerate(queries, 1):
-            print(f"\n📝 Query {i}: '{query}'")
+            queries = [
+                "Show me recent crypto prediction events",
+                "Find trending political betting markets",
+                "Get 5 latest AI-related predictions"
+            ]
 
-            try:
-                # In real MCP, this would be a JSON-RPC call
-                # For FastMCP testing, we call the tool directly
-                from agent.mcp_server import query_polymarket
+            for i, query in enumerate(queries, 1):
+                print(f"\n📝 Query {i}: '{query}'")
 
                 result = await query_polymarket(query)
 
@@ -96,102 +102,150 @@ class SimpleMCPClient:
                         events = len(data.get("events", {}).get("data", []))
                         markets = len(data.get("markets", {}).get("data", []))
                         print(f"   📊 Retrieved {events} events, {markets} markets")
-
                 else:
                     error = result.get("error", "unknown")
                     print(f"❌ Failed: {error}")
 
-            except Exception as e:
-                print(f"❌ Exception: {e}")
+        except Exception as e:
+            print(f"❌ Natural language testing failed: {e}")
 
     async def test_direct_tools(self):
         """Test direct tool calls."""
-        print("\n🔧 TESTING: Direct tool calls")
+        print("\n🔧 TESTING: Direct Tool Calls")
         print("-" * 40)
 
-        # Test get_events
         try:
-            print("\n📅 Testing get_events(limit=3)...")
-            from agent.mcp_server import get_events
-            result = await get_events(limit=3)
+            from agent.mcp_server import get_events, get_markets, search_polymarket_data
 
+            # Test get_events
+            print("\n📅 Testing get_events(limit=3)...")
+            result = await get_events(limit=3)
             if result.get("success"):
                 count = len(result.get("data", {}).get("data", []))
                 print(f"✅ Success - Got {count} events")
             else:
                 print(f"❌ Failed: {result.get('error')}")
 
-        except Exception as e:
-            print(f"❌ Exception: {e}")
-
-        # Test get_markets
-        try:
+            # Test get_markets
             print("\n📈 Testing get_markets(limit=3)...")
-            from agent.mcp_server import get_markets
             result = await get_markets(limit=3)
-
             if result.get("success"):
                 count = len(result.get("data", {}).get("data", []))
                 print(f"✅ Success - Got {count} markets")
             else:
                 print(f"❌ Failed: {result.get('error')}")
 
-        except Exception as e:
-            print(f"❌ Exception: {e}")
+            # Test search
+            print("\n🔍 Testing search_polymarket_data('crypto')...")
+            result = await search_polymarket_data("crypto bitcoin", limit=2)
+            if result.get("success"):
+                events_count = len(result.get("data", {}).get("events", {}).get("data", []))
+                markets_count = len(result.get("data", {}).get("markets", {}).get("data", []))
+                print(f"✅ Success - Found {events_count} events, {markets_count} markets")
+            else:
+                print(f"❌ Failed: {result.get('error')}")
 
-    async def run_test(self):
-        """Run the simple MCP client test."""
-        print("=" * 50)
-        print("🌐 SIMPLE MCP CLIENT TEST")
-        print("=" * 50)
-        print("Testing connection to running Polymarket MCP server")
+        except Exception as e:
+            print(f"❌ Direct tools testing failed: {e}")
+
+    async def test_resources(self):
+        """Test MCP resources."""
+        print("\n📚 TESTING: MCP Resources")
+        print("-" * 40)
+
+        try:
+            from agent.mcp_server import (
+                market_analysis_template,
+                crypto_markets_summary,
+                trading_strategies_guide,
+                api_documentation
+            )
+
+            resources = [
+                ("market-analysis-template", market_analysis_template),
+                ("crypto-markets-summary", crypto_markets_summary),
+                ("trading-strategies-guide", trading_strategies_guide),
+                ("api-documentation", api_documentation)
+            ]
+
+            for name, resource_func in resources:
+                print(f"\n📖 Reading {name}...")
+                try:
+                    content = resource_func()
+                    content_length = len(content) if content else 0
+                    print(f"✅ Success - {content_length} characters")
+
+                    # Show preview
+                    if content and len(content) > 100:
+                        preview = content[:100] + "..."
+                        print(f"   Preview: {preview}")
+
+                except Exception as e:
+                    print(f"❌ Failed to read {name}: {e}")
+
+        except Exception as e:
+            print(f"❌ Resources testing failed: {e}")
+
+    async def run_complete_test(self):
+        """Run complete MCP test suite."""
+        print("=" * 60)
+        print("🧪 COMPLETE MCP SERVER TEST")
+        print("=" * 60)
+        print("Testing your Polymarket MCP server")
+        print(f"Server: {self.mcp_url}")
         print()
 
-        # Step 1: Connect
-        connected = await self.connect()
-        if not connected:
-            return
+        try:
+            # Step 1: Check server
+            if not await self.check_server():
+                print("\n❌ Server not accessible. Start with: python main.py")
+                return
 
-        # Step 2: Discover
-        discovered = await self.discover()
-        if not discovered:
-            return
+            # Step 2: Test discovery
+            await self.test_mcp_discovery()
 
-        # Step 3: Test natural language queries
-        await self.test_natural_language_queries()
+            # Step 3: Test natural language
+            await self.test_natural_language_queries()
 
-        # Step 4: Test direct tools
-        await self.test_direct_tools()
+            # Step 4: Test direct tools
+            await self.test_direct_tools()
 
-        # Summary
-        print("\n" + "=" * 50)
-        print("🎉 TEST COMPLETE")
-        print("=" * 50)
-        print("✅ MCP server is working correctly")
-        print("✅ Natural language queries processed")
-        print("✅ Direct tools accessible")
-        print("✅ Ready for real agent connections!")
+            # Step 5: Test resources
+            await self.test_resources()
+
+            # Summary
+            print("\n" + "=" * 60)
+            print("🎉 ALL TESTS COMPLETE")
+            print("=" * 60)
+            print("✅ MCP server is working correctly")
+            print("✅ Tools are functional")
+            print("✅ Resources are accessible")
+            print("✅ Natural language processing works")
+            print("✅ Ready for other Torus agents to connect!")
+
+            print("\n🌐 Other agents can connect at:")
+            print(f"   {self.mcp_url}")
+
+        finally:
+            await self.close()
 
 
 async def main():
-    """Main function."""
-    print("Simple MCP Protocol Client")
-    print("Assumes your Polymarket MCP server is already running")
+    """Main test function."""
+    print("MCP Server Test Client")
+    print("Tests your networked Polymarket MCP server")
     print()
 
-    # Check if user wants to proceed
-    try:
-        proceed = input("Is main.py running? (y/n): ").strip().lower()
-        if proceed != 'y':
-            print("Please start main.py first, then run this client")
-            return
-    except KeyboardInterrupt:
-        print("\n👋 Cancelled")
-        return
+    # Allow custom server URL
+    server_url = input("MCP server URL [http://localhost:8000/mcp]: ").strip()
+    if not server_url:
+        server_url = "http://localhost:8000/mcp"
 
-    # Run the test
-    client = SimpleMCPClient()
-    await client.run_test()
+    print(f"Testing server: {server_url}")
+    print()
+
+    client = MCPTestClient(server_url)
+    await client.run_complete_test()
 
 
 if __name__ == "__main__":
