@@ -1,8 +1,7 @@
 # agent/data_fetcher.py
 """
-Clean Polymarket service with natural language query processing.
-Pure data service - no HTTP endpoints, just API calls and NL processing.
-Fixed for JSON serialization issues.
+Fixed Polymarket service using the correct current APIs.
+Uses Gamma REST API and Goldsky GraphQL endpoints for real current market data.
 """
 
 import httpx
@@ -11,7 +10,7 @@ import re
 import json
 import logging
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -19,9 +18,15 @@ logger = logging.getLogger(__name__)
 
 
 class PolymarketService:
-    """Polymarket service with natural language query processing."""
+    """Polymarket service with real current market data from official APIs."""
 
-    BASE_URL = "https://gamma-api.polymarket.com"
+    # Official Polymarket APIs (2025)
+    GAMMA_API_URL = "https://gamma-api.polymarket.com"
+
+    # Goldsky GraphQL endpoints (official Polymarket subgraphs)
+    GOLDSKY_ACTIVITY_URL = "https://api.goldsky.com/api/public/project_cl6mb8i9h0003e201j6li0diw/subgraphs/activity-subgraph/0.0.4/gn"
+    GOLDSKY_POSITIONS_URL = "https://api.goldsky.com/api/public/project_cl6mb8i9h0003e201j6li0diw/subgraphs/positions-subgraph/0.0.7/gn"
+    GOLDSKY_ORDERS_URL = "https://api.goldsky.com/api/public/project_cl6mb8i9h0003e201j6li0diw/subgraphs/orderbook-subgraph/0.0.1/gn"
 
     def __init__(self):
         self.client = httpx.AsyncClient(
@@ -38,27 +43,15 @@ class PolymarketService:
         if not isinstance(text, str):
             return str(text)
 
-        # Remove or replace problematic characters
-        # Replace smart quotes and other Unicode characters using Unicode codes
         replacements = {
-            '\u201c': '"',  # Smart quote left
-            '\u201d': '"',  # Smart quote right
-            '\u2018': "'",  # Smart apostrophe left
-            '\u2019': "'",  # Smart apostrophe right
-            '\u2013': '-',  # En dash
-            '\u2014': '-',  # Em dash
-            '\u2026': '...',  # Ellipsis
-            '\u00a0': ' ',  # Non-breaking space
-            '\u00ab': '"',  # Left-pointing double angle quotation mark
-            '\u00bb': '"',  # Right-pointing double angle quotation mark
+            '\u201c': '"', '\u201d': '"', '\u2018': "'", '\u2019': "'",
+            '\u2013': '-', '\u2014': '-', '\u2026': '...', '\u00a0': ' ',
         }
 
         for old, new in replacements.items():
             text = text.replace(old, new)
 
-        # Remove any remaining non-printable characters except newlines and tabs
         text = ''.join(char for char in text if char.isprintable() or char in '\n\t')
-
         return text
 
     def _sanitize_data(self, data: Any) -> Any:
@@ -74,19 +67,15 @@ class PolymarketService:
             return self._sanitize_string(data)
         elif isinstance(data, (int, float, bool)) or data is None:
             return data
-        elif hasattr(data, 'isoformat'):  # datetime objects
+        elif hasattr(data, 'isoformat'):
             return data.isoformat()
         else:
-            # Convert unknown types to string
             return str(data)
 
     def _safe_json_response(self, data: Any, query_info: Optional[Dict] = None) -> Dict[str, Any]:
         """Create a JSON-safe response wrapper."""
         try:
-            # Sanitize the data first
             sanitized_data = self._sanitize_data(data)
-
-            # Test JSON serialization
             json.dumps(sanitized_data, ensure_ascii=False, default=str)
 
             response = {
@@ -102,157 +91,421 @@ class PolymarketService:
 
         except (TypeError, ValueError, UnicodeDecodeError) as e:
             logger.error(f"JSON serialization error: {e}")
-            logger.error(f"Problematic data type: {type(data)}")
-
-            # Return error response with safe fallback
             return {
                 "success": False,
                 "error": f"Data serialization error: {str(e)}",
                 "error_type": type(e).__name__,
                 "timestamp": datetime.now().isoformat(),
-                "data_type": str(type(data)),
-                "data_preview": str(data)[:200] if data else None,
                 **(query_info or {})
             }
 
+    # ========== Gamma REST API Methods ==========
+
+    async def _fetch_gamma_markets(self, limit: int = 20, **params) -> List[Dict]:
+        """Fetch markets from Gamma REST API."""
+        try:
+            # Default params for active markets
+            default_params = {
+                "limit": min(limit, 100),
+                "active": True,
+                "closed": False,
+                "archived": False
+            }
+
+            # Override with provided params
+            default_params.update(params)
+
+            response = await self.client.get(f"{self.GAMMA_API_URL}/markets", params=default_params)
+            response.raise_for_status()
+
+            data = response.json()
+            logger.info(f"Gamma API returned {len(data)} markets")
+
+            return data if isinstance(data, list) else []
+
+        except Exception as e:
+            logger.error(f"Error fetching Gamma markets: {e}")
+            return []
+
+    async def _fetch_gamma_events(self, limit: int = 20, **params) -> List[Dict]:
+        """Fetch events from Gamma REST API."""
+        try:
+            default_params = {
+                "limit": min(limit, 100),
+                "active": True,
+                "closed": False,
+                "archived": False
+            }
+
+            default_params.update(params)
+
+            response = await self.client.get(f"{self.GAMMA_API_URL}/events", params=default_params)
+            response.raise_for_status()
+
+            data = response.json()
+            logger.info(f"Gamma API returned {len(data)} events")
+
+            return data if isinstance(data, list) else []
+
+        except Exception as e:
+            logger.error(f"Error fetching Gamma events: {e}")
+            return []
+
+    async def _fetch_gamma_market_by_slug(self, slug: str) -> Optional[Dict]:
+        """Fetch a specific market by slug."""
+        try:
+            response = await self.client.get(f"{self.GAMMA_API_URL}/markets/{slug}")
+            response.raise_for_status()
+
+            return response.json()
+
+        except Exception as e:
+            logger.error(f"Error fetching market {slug}: {e}")
+            return None
+
+    # ========== Goldsky GraphQL Methods ==========
+
+    async def _execute_goldsky_query(self, query: str, url: str) -> Optional[Dict]:
+        """Execute a GraphQL query against Goldsky endpoints."""
+        payload = {"query": query}
+
+        try:
+            response = await self.client.post(url, json=payload)
+            response.raise_for_status()
+
+            data = response.json()
+
+            if 'errors' in data:
+                logger.warning(f"Goldsky GraphQL errors: {data['errors']}")
+                return None
+
+            return data.get('data')
+
+        except Exception as e:
+            logger.error(f"Goldsky query error: {e}")
+            return None
+
+    async def _fetch_recent_trades(self, limit: int = 10) -> List[Dict]:
+        """Fetch recent trades from Goldsky activity subgraph."""
+        query = f"""
+        {{
+            trades(
+                first: {min(limit, 100)},
+                orderBy: timestamp,
+                orderDirection: desc
+            ) {{
+                id
+                timestamp
+                trader
+                collateralAmount
+                outcomeTokensAmount
+                fpmmAddress
+                outcomeIndex
+            }}
+        }}
+        """
+
+        result = await self._execute_goldsky_query(query, self.GOLDSKY_ACTIVITY_URL)
+
+        if result and 'trades' in result:
+            return result['trades']
+        return []
+
+    # ========== Enhanced Market Processing ==========
+
+    def _process_gamma_market(self, market: Dict) -> Dict:
+        """Process and enhance market data from Gamma API."""
+        try:
+            processed = market.copy()
+
+            # Parse JSON fields that come as strings
+            if 'outcomePrices' in processed and isinstance(processed['outcomePrices'], str):
+                try:
+                    processed['outcomePrices'] = json.loads(processed['outcomePrices'])
+                except:
+                    processed['outcomePrices'] = []
+
+            if 'clobTokenIds' in processed and isinstance(processed['clobTokenIds'], str):
+                try:
+                    processed['clobTokenIds'] = json.loads(processed['clobTokenIds'])
+                except:
+                    processed['clobTokenIds'] = []
+
+            # Add computed fields
+            processed['volume_usd'] = float(processed.get('volumeNum', 0))
+            processed['liquidity_usd'] = float(processed.get('liquidityNum', 0))
+
+            # Parse outcome prices to individual fields
+            outcome_prices = processed.get('outcomePrices', [])
+            if len(outcome_prices) >= 2:
+                processed['yes_price'] = float(outcome_prices[0])
+                processed['no_price'] = float(outcome_prices[1])
+            else:
+                processed['yes_price'] = 0.5
+                processed['no_price'] = 0.5
+
+            # Determine market status
+            processed['is_active'] = processed.get('active', False) and not processed.get('closed', True)
+            processed['status'] = 'active' if processed['is_active'] else 'closed'
+
+            # Clean up text fields
+            if 'question' in processed:
+                processed['question'] = self._sanitize_string(processed['question'])
+            if 'description' in processed:
+                processed['description'] = self._sanitize_string(processed['description'])
+
+            # Add timestamp info
+            processed['created_at'] = processed.get('createdAt', '')
+            processed['end_date'] = processed.get('endDateIso', '')
+
+            return processed
+
+        except Exception as e:
+            logger.warning(f"Error processing market: {e}")
+            return market
+
+    def _process_gamma_event(self, event: Dict) -> Dict:
+        """Process and enhance event data from Gamma API."""
+        try:
+            processed = event.copy()
+
+            # Get markets from the event
+            markets = processed.get('markets', [])
+
+            # Calculate totals from related markets
+            total_volume = sum(float(m.get('volumeNum', 0)) for m in markets)
+            total_liquidity = sum(float(m.get('liquidityNum', 0)) for m in markets)
+
+            processed['volume_usd'] = total_volume
+            processed['liquidity_usd'] = total_liquidity
+            processed['markets_count'] = len(markets)
+
+            # Clean up text fields
+            if 'title' in processed:
+                processed['title'] = self._sanitize_string(processed['title'])
+            if 'description' in processed:
+                processed['description'] = self._sanitize_string(processed['description'])
+
+            # Add status
+            processed['is_active'] = processed.get('active', False)
+            processed['status'] = 'active' if processed['is_active'] else 'closed'
+
+            return processed
+
+        except Exception as e:
+            logger.warning(f"Error processing event: {e}")
+            return event
+
     # ========== Core API Methods ==========
 
-    async def fetch_events(self, limit: int = 20, **filters) -> Dict[str, Any]:
-        """Fetch Polymarket events with optional filters."""
-        try:
-            params = {"limit": min(limit, 100)}  # Cap limit to prevent issues
-            params.update(filters)
-
-            logger.info(f"Fetching events with params: {params}")
-
-            response = await self.client.get(f"{self.BASE_URL}/events", params=params)
-            response.raise_for_status()
-
-            raw_data = response.json()
-            return self._safe_json_response(raw_data)
-
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error fetching events: {e}")
-            return self._safe_json_response(None, {
-                "error": f"HTTP {e.response.status_code}: {e.response.text}",
-                "endpoint": "events"
-            })
-        except Exception as e:
-            logger.error(f"Unexpected error fetching events: {e}")
-            return self._safe_json_response(None, {
-                "error": f"Unexpected error: {str(e)}",
-                "endpoint": "events"
-            })
-
-    async def fetch_event_by_id(self, event_id: str) -> Dict[str, Any]:
-        """Fetch a single event by ID."""
-        try:
-            sanitized_id = self._sanitize_string(event_id)
-            logger.info(f"Fetching event by ID: {sanitized_id}")
-
-            response = await self.client.get(f"{self.BASE_URL}/events/{sanitized_id}")
-            response.raise_for_status()
-
-            raw_data = response.json()
-            return self._safe_json_response(raw_data)
-
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error fetching event {event_id}: {e}")
-            return self._safe_json_response(None, {
-                "error": f"HTTP {e.response.status_code}: {e.response.text}",
-                "endpoint": f"events/{event_id}"
-            })
-        except Exception as e:
-            logger.error(f"Unexpected error fetching event {event_id}: {e}")
-            return self._safe_json_response(None, {
-                "error": f"Unexpected error: {str(e)}",
-                "endpoint": f"events/{event_id}"
-            })
-
     async def fetch_markets(self, limit: int = 20, **filters) -> Dict[str, Any]:
-        """Fetch Polymarket markets with optional filters."""
+        """Fetch real current markets from Gamma API."""
         try:
-            params = {"limit": min(limit, 100)}  # Cap limit to prevent issues
-            params.update(filters)
+            logger.info(f"Fetching markets from Gamma API with limit: {limit}")
 
-            logger.info(f"Fetching markets with params: {params}")
+            # Build Gamma API parameters
+            params = {}
 
-            response = await self.client.get(f"{self.BASE_URL}/markets", params=params)
-            response.raise_for_status()
+            # Handle search filter
+            if 'search' in filters:
+                # Gamma API doesn't have direct text search, so we'll filter after
+                pass
 
-            raw_data = response.json()
-            return self._safe_json_response(raw_data)
+            # Handle active filter
+            if filters.get('active_only'):
+                params['active'] = True
+                params['closed'] = False
+                params['archived'] = False
 
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error fetching markets: {e}")
+            # Handle category filter
+            if 'category' in filters:
+                params['tag'] = filters['category']
+
+            # Fetch markets
+            raw_markets = await self._fetch_gamma_markets(limit, **params)
+
+            # Process markets
+            markets = [self._process_gamma_market(m) for m in raw_markets]
+
+            # Apply post-fetch filters
+            if 'search' in filters:
+                search_term = filters['search'].lower()
+                markets = [
+                    m for m in markets
+                    if search_term in m.get('question', '').lower() or
+                       search_term in m.get('description', '').lower()
+                ]
+
+            if 'min_volume' in filters:
+                min_vol = float(filters['min_volume'])
+                markets = [m for m in markets if m.get('volume_usd', 0) >= min_vol]
+
+            response_data = {
+                'data': markets[:limit],
+                'count': len(markets),
+                'source': 'gamma_api',
+                'filters_applied': filters
+            }
+
+            return self._safe_json_response(response_data)
+
+        except Exception as e:
+            logger.error(f"Error fetching markets: {e}")
             return self._safe_json_response(None, {
-                "error": f"HTTP {e.response.status_code}: {e.response.text}",
+                "error": f"Markets fetch error: {str(e)}",
                 "endpoint": "markets"
             })
+
+    async def fetch_events(self, limit: int = 20, **filters) -> Dict[str, Any]:
+        """Fetch real current events from Gamma API."""
+        try:
+            logger.info(f"Fetching events from Gamma API with limit: {limit}")
+
+            params = {}
+
+            if filters.get('active_only'):
+                params['active'] = True
+                params['closed'] = False
+                params['archived'] = False
+
+            if 'category' in filters:
+                params['tag'] = filters['category']
+
+            raw_events = await self._fetch_gamma_events(limit, **params)
+
+            events = [self._process_gamma_event(e) for e in raw_events]
+
+            # Apply search filter
+            if 'search' in filters:
+                search_term = filters['search'].lower()
+                events = [
+                    e for e in events
+                    if search_term in e.get('title', '').lower() or
+                       search_term in e.get('description', '').lower()
+                ]
+
+            if 'min_volume' in filters:
+                min_vol = float(filters['min_volume'])
+                events = [e for e in events if e.get('volume_usd', 0) >= min_vol]
+
+            response_data = {
+                'data': events[:limit],
+                'count': len(events),
+                'source': 'gamma_api',
+                'filters_applied': filters
+            }
+
+            return self._safe_json_response(response_data)
+
         except Exception as e:
-            logger.error(f"Unexpected error fetching markets: {e}")
+            logger.error(f"Error fetching events: {e}")
             return self._safe_json_response(None, {
-                "error": f"Unexpected error: {str(e)}",
-                "endpoint": "markets"
+                "error": f"Events fetch error: {str(e)}",
+                "endpoint": "events"
             })
 
     async def fetch_market_by_id(self, market_id: str) -> Dict[str, Any]:
-        """Fetch a single market by ID."""
+        """Fetch a single market by ID/slug."""
         try:
             sanitized_id = self._sanitize_string(market_id)
             logger.info(f"Fetching market by ID: {sanitized_id}")
 
-            response = await self.client.get(f"{self.BASE_URL}/markets/{sanitized_id}")
-            response.raise_for_status()
+            market = await self._fetch_gamma_market_by_slug(sanitized_id)
 
-            raw_data = response.json()
-            return self._safe_json_response(raw_data)
+            if not market:
+                return self._safe_json_response(None, {
+                    "error": "Market not found",
+                    "market_id": sanitized_id
+                })
 
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error fetching market {market_id}: {e}")
-            return self._safe_json_response(None, {
-                "error": f"HTTP {e.response.status_code}: {e.response.text}",
-                "endpoint": f"markets/{market_id}"
-            })
+            processed_market = self._process_gamma_market(market)
+
+            # Try to get recent trades
+            try:
+                trades = await self._fetch_recent_trades(10)
+                processed_market['recent_trades'] = trades[:5]
+            except:
+                processed_market['recent_trades'] = []
+
+            return self._safe_json_response(processed_market)
+
         except Exception as e:
-            logger.error(f"Unexpected error fetching market {market_id}: {e}")
+            logger.error(f"Error fetching market {market_id}: {e}")
             return self._safe_json_response(None, {
-                "error": f"Unexpected error: {str(e)}",
-                "endpoint": f"markets/{market_id}"
+                "error": f"Market fetch error: {str(e)}",
+                "market_id": market_id
+            })
+
+    # ========== Search Function for MCP ==========
+
+    async def search_polymarket_data(self, search_terms: str, limit: int = 20) -> Dict[str, Any]:
+        """Search both events and markets - for MCP compatibility."""
+        try:
+            search_filters = {'search': search_terms, 'active_only': True}
+
+            # Fetch both concurrently
+            events_task = self.fetch_events(limit, **search_filters)
+            markets_task = self.fetch_markets(limit, **search_filters)
+
+            events_result, markets_result = await asyncio.gather(
+                events_task, markets_task, return_exceptions=True
+            )
+
+            return self._safe_json_response({
+                "events": events_result if not isinstance(events_result, Exception) else {"error": str(events_result)},
+                "markets": markets_result if not isinstance(markets_result, Exception) else {
+                    "error": str(markets_result)}
+            })
+
+        except Exception as e:
+            logger.error(f"Error in search: {e}")
+            return self._safe_json_response(None, {
+                "error": f"Search error: {str(e)}",
+                "search_terms": search_terms
             })
 
     # ========== Natural Language Processing ==========
 
     async def process_natural_query(self, query: str) -> Dict[str, Any]:
-        """
-        Process natural language queries and convert to API calls.
-        This is the core "LLM-like transformation" capability.
-        """
+        """Process natural language queries for real market data."""
         try:
             sanitized_query = self._sanitize_string(query.strip())
             query_lower = sanitized_query.lower()
 
             logger.info(f"Processing natural query: {sanitized_query}")
 
-            # Determine query intent and extract parameters
             intent = self._classify_query_intent(query_lower)
             params = self._extract_query_parameters(query_lower)
 
             logger.info(f"Classified intent: {intent}, params: {params}")
 
-            # Route to appropriate handler based on intent
+            # Route to appropriate handler
             if intent == "events":
-                result = await self._handle_events_query(params)
+                result = await self.fetch_events(limit=params.get('limit', 20), **params.get('filters', {}))
             elif intent == "markets":
-                result = await self._handle_markets_query(params)
-            elif intent == "search":
-                result = await self._handle_search_query(params)
-            elif intent == "trending":
-                result = await self._handle_trending_query(params)
-            elif intent == "recent":
-                result = await self._handle_recent_query(params)
-            else:
-                result = await self._handle_general_query(sanitized_query, params)
+                result = await self.fetch_markets(limit=params.get('limit', 20), **params.get('filters', {}))
+            elif intent in ["search", "trending", "recent", "general"]:
+                # For all these intents, search both markets and events
+                search_term = params.get('search_term', '')
+                filters = params.get('filters', {})
+                filters['active_only'] = True
+
+                if intent == "trending":
+                    filters['min_volume'] = 1000
+
+                events_task = self.fetch_events(limit=params.get('limit', 10), **filters)
+                markets_task = self.fetch_markets(limit=params.get('limit', 10), **filters)
+
+                events_result, markets_result = await asyncio.gather(
+                    events_task, markets_task, return_exceptions=True
+                )
+
+                result = self._safe_json_response({
+                    "events": events_result if not isinstance(events_result, Exception) else {
+                        "error": str(events_result)},
+                    "markets": markets_result if not isinstance(markets_result, Exception) else {
+                        "error": str(markets_result)}
+                })
 
             # Add query metadata
             result["original_query"] = sanitized_query
@@ -270,395 +523,89 @@ class PolymarketService:
             })
 
     def _classify_query_intent(self, query: str) -> str:
-        """Classify the intent of a natural language query using regex patterns."""
-
-        # Event-related keywords
+        """Classify the intent of a natural language query."""
         if any(word in query for word in ["event", "events", "happening", "outcome"]):
             return "events"
-
-        # Market-related keywords
-        if any(word in query for word in ["market", "markets", "betting", "odds", "price"]):
+        elif any(word in query for word in ["market", "markets", "betting", "odds", "price", "prediction"]):
             return "markets"
-
-        # Search keywords
-        if any(word in query for word in ["search", "find", "looking for", "about"]):
-            return "search"
-
-        # Trending keywords
-        if any(word in query for word in ["trending", "popular", "hot", "most traded"]):
+        elif any(word in query for word in ["trending", "popular", "hot", "most traded", "high volume"]):
             return "trending"
-
-        # Recent/time-based keywords
-        if any(word in query for word in ["recent", "latest", "new", "today", "yesterday"]):
+        elif any(word in query for word in ["recent", "latest", "new", "today", "current", "active"]):
             return "recent"
-
-        return "general"
+        elif any(word in query for word in ["search", "find", "looking for", "about"]):
+            return "search"
+        else:
+            return "general"
 
     def _extract_query_parameters(self, query: str) -> Dict[str, Any]:
-        """Extract parameters from natural language query using regex."""
-        params = {}
+        """Extract parameters from natural language query."""
+        params = {'filters': {}}
 
-        # Extract limit/count using regex
+        # Extract limit/count
         limit_match = re.search(r'\b(\d+)\s*(?:events?|markets?|results?|items?)\b', query)
         if limit_match:
-            params['limit'] = min(int(limit_match.group(1)), 100)  # Cap at 100
+            params['limit'] = min(int(limit_match.group(1)), 100)
         elif 'few' in query:
             params['limit'] = 5
         elif 'many' in query or 'all' in query:
-            params['limit'] = 50  # Reduced from 100 to prevent issues
+            params['limit'] = 50
         else:
             params['limit'] = 20
 
-        # Extract topic keywords
+        # Extract search terms
         topics = [
             "crypto", "cryptocurrency", "bitcoin", "ethereum", "btc", "eth",
-            "politics", "election", "political", "vote", "candidate",
-            "sports", "game", "match", "team", "player",
-            "weather", "climate", "temperature", "storm",
-            "ai", "artificial intelligence", "machine learning", "tech", "technology"
+            "politics", "election", "political", "vote", "candidate", "trump", "biden",
+            "sports", "game", "match", "team", "player", "nfl", "nba", "soccer",
+            "weather", "climate", "ai", "tech", "technology", "stock", "finance"
         ]
 
         found_topics = [topic for topic in topics if topic in query]
         if found_topics:
-            params['topics'] = found_topics
+            params['search_term'] = found_topics[0]
+            params['filters']['search'] = found_topics[0]
 
-        # Extract time-related parameters
-        if any(word in query for word in ["today", "daily"]):
-            params['time_filter'] = 'today'
-        elif any(word in query for word in ["week", "weekly"]):
-            params['time_filter'] = 'week'
-        elif any(word in query for word in ["month", "monthly"]):
-            params['time_filter'] = 'month'
-
-        # Extract search terms (filter out stop words)
-        stop_words = {
-            'the', 'is', 'at', 'which', 'on', 'and', 'or', 'but', 'in', 'with',
-            'a', 'an', 'as', 'are', 'was', 'be', 'been', 'have', 'has', 'had',
-            'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might',
-            'get', 'show', 'find', 'search', 'look', 'for', 'about', 'me', 'i', 'you',
-            'this', 'that', 'these', 'those', 'what', 'where', 'when', 'why', 'how'
-        }
-
-        # Extract meaningful words
-        words = re.findall(r'\b\w+\b', query.lower())
-        search_terms = [word for word in words if word not in stop_words and len(word) > 2]
-
-        if search_terms:
-            params['search_terms'] = search_terms[:10]  # Limit search terms
+        # Extract filters
+        if any(word in query for word in ["active", "current", "ongoing"]):
+            params['filters']['active_only'] = True
 
         return params
 
-    # ========== Query Handlers ==========
 
-    async def _handle_events_query(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle event-specific queries."""
-        result = await self.fetch_events(limit=params.get('limit', 20))
-
-        # Apply search term filtering if needed and if fetch was successful
-        if result.get('success') and params.get('search_terms'):
-            result = self._filter_by_search_terms(result, params['search_terms'])
-
-        # Add query metadata
-        result["query_type"] = "events"
-        result["processed_params"] = params
-
-        return result
-
-    async def _handle_markets_query(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle market-specific queries."""
-        result = await self.fetch_markets(limit=params.get('limit', 20))
-
-        # Apply search term filtering if needed and if fetch was successful
-        if result.get('success') and params.get('search_terms'):
-            result = self._filter_by_search_terms(result, params['search_terms'])
-
-        # Add query metadata
-        result["query_type"] = "markets"
-        result["processed_params"] = params
-
-        return result
-
-    async def _handle_search_query(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle search queries - fetch both events and markets."""
-        limit = params.get('limit', 10)
-
-        # Fetch both events and markets concurrently
-        events_task = self.fetch_events(limit=limit)
-        markets_task = self.fetch_markets(limit=limit)
-
-        try:
-            events_result, markets_result = await asyncio.gather(
-                events_task, markets_task, return_exceptions=True
-            )
-
-            # Handle exceptions in results
-            if isinstance(events_result, Exception):
-                logger.error(f"Events fetch failed: {events_result}")
-                events_result = self._safe_json_response(None, {"error": str(events_result)})
-
-            if isinstance(markets_result, Exception):
-                logger.error(f"Markets fetch failed: {markets_result}")
-                markets_result = self._safe_json_response(None, {"error": str(markets_result)})
-
-            # Apply search term filtering to both if successful
-            if events_result.get('success') and params.get('search_terms'):
-                events_result = self._filter_by_search_terms(events_result, params['search_terms'])
-
-            if markets_result.get('success') and params.get('search_terms'):
-                markets_result = self._filter_by_search_terms(markets_result, params['search_terms'])
-
-            return self._safe_json_response({
-                "events": events_result,
-                "markets": markets_result
-            }, {
-                "query_type": "search",
-                "processed_params": params
-            })
-
-        except Exception as e:
-            logger.error(f"Error in search query handler: {e}")
-            return self._safe_json_response(None, {
-                "error": f"Search handler error: {str(e)}",
-                "query_type": "search",
-                "processed_params": params
-            })
-
-    async def _handle_trending_query(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle trending/popular queries."""
-        limit = params.get('limit', 20)
-
-        try:
-            # Fetch recent data (in real implementation, you'd sort by volume/activity)
-            events_task = self.fetch_events(limit=limit)
-            markets_task = self.fetch_markets(limit=limit)
-
-            events_result, markets_result = await asyncio.gather(
-                events_task, markets_task, return_exceptions=True
-            )
-
-            # Handle exceptions in results
-            if isinstance(events_result, Exception):
-                events_result = self._safe_json_response(None, {"error": str(events_result)})
-
-            if isinstance(markets_result, Exception):
-                markets_result = self._safe_json_response(None, {"error": str(markets_result)})
-
-            return self._safe_json_response({
-                "trending_events": events_result,
-                "trending_markets": markets_result
-            }, {
-                "query_type": "trending",
-                "processed_params": params
-            })
-
-        except Exception as e:
-            logger.error(f"Error in trending query handler: {e}")
-            return self._safe_json_response(None, {
-                "error": f"Trending handler error: {str(e)}",
-                "query_type": "trending",
-                "processed_params": params
-            })
-
-    async def _handle_recent_query(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle recent/latest queries."""
-        limit = params.get('limit', 20)
-
-        try:
-            events_task = self.fetch_events(limit=limit)
-            markets_task = self.fetch_markets(limit=limit)
-
-            events_result, markets_result = await asyncio.gather(
-                events_task, markets_task, return_exceptions=True
-            )
-
-            # Handle exceptions in results
-            if isinstance(events_result, Exception):
-                events_result = self._safe_json_response(None, {"error": str(events_result)})
-
-            if isinstance(markets_result, Exception):
-                markets_result = self._safe_json_response(None, {"error": str(markets_result)})
-
-            return self._safe_json_response({
-                "recent_events": events_result,
-                "recent_markets": markets_result
-            }, {
-                "query_type": "recent",
-                "processed_params": params
-            })
-
-        except Exception as e:
-            logger.error(f"Error in recent query handler: {e}")
-            return self._safe_json_response(None, {
-                "error": f"Recent handler error: {str(e)}",
-                "query_type": "recent",
-                "processed_params": params
-            })
-
-    async def _handle_general_query(self, original_query: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle general queries that don't fit specific categories."""
-        limit = params.get('limit', 10)
-
-        try:
-            # Default to searching both events and markets
-            events_task = self.fetch_events(limit=limit)
-            markets_task = self.fetch_markets(limit=limit)
-
-            events_result, markets_result = await asyncio.gather(
-                events_task, markets_task, return_exceptions=True
-            )
-
-            # Handle exceptions in results
-            if isinstance(events_result, Exception):
-                events_result = self._safe_json_response(None, {"error": str(events_result)})
-
-            if isinstance(markets_result, Exception):
-                markets_result = self._safe_json_response(None, {"error": str(markets_result)})
-
-            # Apply search term filtering if successful
-            if events_result.get('success') and params.get('search_terms'):
-                events_result = self._filter_by_search_terms(events_result, params['search_terms'])
-
-            if markets_result.get('success') and params.get('search_terms'):
-                markets_result = self._filter_by_search_terms(markets_result, params['search_terms'])
-
-            return self._safe_json_response({
-                "events": events_result,
-                "markets": markets_result
-            }, {
-                "query_type": "general",
-                "original_query": original_query,
-                "processed_params": params
-            })
-
-        except Exception as e:
-            logger.error(f"Error in general query handler: {e}")
-            return self._safe_json_response(None, {
-                "error": f"General handler error: {str(e)}",
-                "query_type": "general",
-                "original_query": original_query,
-                "processed_params": params
-            })
-
-    def _filter_by_search_terms(self, data: Dict[str, Any], search_terms: List[str]) -> Dict[str, Any]:
-        """Filter data based on search terms."""
-        if not search_terms or not data or not data.get('success'):
-            return data
-
-        try:
-            # Create a copy to avoid modifying original
-            filtered_data = data.copy()
-
-            # Filter items based on search terms
-            if 'data' in filtered_data and isinstance(filtered_data['data'], dict):
-                api_data = filtered_data['data']
-
-                if 'data' in api_data and isinstance(api_data['data'], list):
-                    items = api_data['data']
-                    filtered_items = []
-
-                    for item in items:
-                        try:
-                            # Convert item to string for searching (safely)
-                            item_text = self._sanitize_string(str(item)).lower()
-                            # Check if any search term appears in the item
-                            if any(term.lower() in item_text for term in search_terms):
-                                filtered_items.append(item)
-                        except Exception as e:
-                            logger.warning(f"Error filtering item: {e}")
-                            # Include item if we can't filter it
-                            filtered_items.append(item)
-
-                    filtered_data['data']['data'] = filtered_items
-                    filtered_data['filtered_count'] = len(filtered_items)
-                    filtered_data['original_count'] = len(items)
-                    filtered_data['search_terms'] = search_terms
-
-            return filtered_data
-
-        except Exception as e:
-            logger.error(f"Error in filtering: {e}")
-            # Return original data if filtering fails
-            return data
-
-    # ========== Schema Information ==========
-
-    def get_schema(self) -> Dict[str, Any]:
-        """Return schema information for MCP introspection."""
-        return {
-            "types": {
-                "Event": {
-                    "fields": [
-                        "id", "title", "description", "start_date",
-                        "end_date", "category", "volume", "liquidity"
-                    ],
-                    "description": "Polymarket prediction event"
-                },
-                "Market": {
-                    "fields": [
-                        "id", "question", "description", "outcomes",
-                        "volume", "liquidity", "price", "probability"
-                    ],
-                    "description": "Polymarket prediction market"
-                }
-            },
-            "queries": {
-                "events": {
-                    "description": "Fetch prediction events",
-                    "parameters": ["limit", "category", "search", "time_filter"]
-                },
-                "markets": {
-                    "description": "Fetch prediction markets",
-                    "parameters": ["limit", "search", "sort_by", "time_filter"]
-                },
-                "natural_query": {
-                    "description": "Process natural language queries",
-                    "parameters": ["query"]
-                },
-                "search": {
-                    "description": "Search across events and markets",
-                    "parameters": ["search_terms", "limit"]
-                }
-            },
-            "capabilities": [
-                "natural_language_processing",
-                "intent_classification",
-                "parameter_extraction",
-                "semantic_search",
-                "multi_source_search",
-                "regex_based_filtering",
-                "json_sanitization",
-                "error_handling"
-            ],
-            "supported_intents": [
-                "events", "markets", "search", "trending", "recent", "general"
-            ],
-            "supported_topics": [
-                "crypto", "politics", "sports", "weather", "ai", "technology"
-            ]
-        }
-
-
-# Test function for debugging
-async def test_service():
-    """Test the service for common issues."""
+# Test function
+async def test_real_apis():
+    """Test the service with real Gamma API."""
     service = PolymarketService()
 
     try:
-        logger.info("Testing PolymarketService...")
+        logger.info("Testing real Polymarket APIs...")
 
-        # Test a simple query
-        result = await service.process_natural_query("crypto markets")
-        logger.info(f"Test result success: {result.get('success', False)}")
+        # Test Gamma API markets
+        markets_result = await service.fetch_markets(5)
+        if markets_result.get('success') and markets_result['data']['data']:
+            markets = markets_result['data']['data']
+            logger.info(f"✅ Found {len(markets)} real markets from Gamma API")
 
-        # Test JSON serialization
-        json.dumps(result, ensure_ascii=False, default=str)
-        logger.info("JSON serialization successful")
+            for market in markets[:2]:
+                question = market.get('question', 'No question')[:100]
+                volume = market.get('volume_usd', 0)
+                status = market.get('status', 'unknown')
+                logger.info(f"  - {question}... (${volume:,.2f}, {status})")
+        else:
+            logger.error(f"❌ Failed to fetch markets: {markets_result.get('error')}")
+
+        # Test natural language query
+        query_result = await service.process_natural_query("show me recent crypto markets")
+        if query_result.get('success'):
+            logger.info("✅ Natural language query processing works")
+        else:
+            logger.error(f"❌ Natural query failed: {query_result.get('error')}")
 
     except Exception as e:
-        logger.error(f"Test failed: {e}")
+        logger.error(f"❌ Test failed with exception: {e}")
     finally:
         await service.close()
 
 
 if __name__ == "__main__":
-    asyncio.run(test_service())
+    asyncio.run(test_real_apis())
