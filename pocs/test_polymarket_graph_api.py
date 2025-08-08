@@ -361,7 +361,7 @@ def main():
             for redemption in recent_redemptions[:3]:
                 payout = redemption.get('payoutUSD', 0)
                 date = redemption.get('redeemedAt', 'Unknown')[:16]
-                print(f"  💎 ${payout:,.2f} on {date}")
+                print(f"${payout:,.2f} on {date}")
 
         # 4. Crypto Markets Search
         print(f"\n4. Crypto-Related Markets")

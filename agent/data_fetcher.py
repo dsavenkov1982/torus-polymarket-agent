@@ -591,7 +591,7 @@ async def test_real_apis():
         # Test natural language query
         query_result = await service.process_natural_query("show me recent crypto markets")
         if query_result.get('success'):
-            logger.info("✅ Natural language query processing works")
+            logger.info("Natural language query processing works")
         else:
             logger.error(f"Natural query failed: {query_result.get('error')}")
 
