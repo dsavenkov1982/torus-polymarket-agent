@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-Explore fixedProductMarketMakers to find market questions and descriptions
-This might be the missing piece for your MCP endpoints!
-"""
-
 import requests
 import json
 from datetime import datetime, timezone

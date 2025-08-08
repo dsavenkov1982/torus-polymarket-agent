@@ -1,14 +1,5 @@
-# test_mcp_client.py
-"""
-Test client for your networked MCP server.
-This is how other Torus agents would connect.
-"""
-
 import asyncio
 import httpx
-import json
-from typing import Dict, Any
-
 
 class MCPTestClient:
     """Test client for networked MCP server."""
@@ -29,27 +20,27 @@ class MCPTestClient:
             response = await self.client.get(self.base_url)
             if response.status_code == 200:
                 info = response.json()
-                print(f"✅ Connected to: {info.get('name')}")
+                print(f"Connected to: {info.get('name')}")
                 print(f"   Version: {info.get('version')}")
                 print(f"   MCP Endpoint: {info.get('mcp_endpoint')}")
                 return True
             else:
-                print(f"❌ Server returned status {response.status_code}")
+                print(f"Server returned status {response.status_code}")
                 return False
         except Exception as e:
-            print(f"❌ Cannot connect: {e}")
+            print(f"Cannot connect: {e}")
             print("   Make sure server is running: python main.py")
             return False
 
     async def test_mcp_discovery(self):
         """Test MCP tool and resource discovery."""
-        print("\n🔍 TESTING: MCP Discovery")
+        print("\nTESTING: MCP Discovery")
         print("-" * 40)
 
         # In real MCP, this would be automatic discovery
         # For testing, we'll show what would be discovered
 
-        print("✅ Tools discovered:")
+        print("Tools discovered:")
         tools = [
             "query_polymarket - Natural language processor",
             "get_events - Direct event fetching",
@@ -59,7 +50,7 @@ class MCPTestClient:
         for tool in tools:
             print(f"   - {tool}")
 
-        print("\n✅ Resources discovered:")
+        print("\nResources discovered:")
         resources = [
             "polymarket://market-analysis-template - Trading analysis template",
             "polymarket://crypto-markets-summary - Live crypto market data",
@@ -71,7 +62,7 @@ class MCPTestClient:
 
     async def test_natural_language_queries(self):
         """Test natural language query processing."""
-        print("\n🧠 TESTING: Natural Language Queries")
+        print("\nTESTING: Natural Language Queries")
         print("-" * 40)
 
         # Import and test the tools directly (simulating MCP calls)
@@ -85,72 +76,72 @@ class MCPTestClient:
             ]
 
             for i, query in enumerate(queries, 1):
-                print(f"\n📝 Query {i}: '{query}'")
+                print(f"\nQuery {i}: '{query}'")
 
                 result = await query_polymarket(query)
 
                 if result.get("success"):
                     intent = result.get("result", {}).get("query_type", "unknown")
-                    print(f"✅ Success - Intent: {intent}")
+                    print(f"Success - Intent: {intent}")
 
                     # Show data summary
                     data = result.get("result", {}).get("data", {})
                     if isinstance(data, dict) and "data" in data:
                         count = len(data["data"]) if isinstance(data["data"], list) else 0
-                        print(f"   📊 Retrieved {count} items")
+                        print(f"Retrieved {count} items")
                     elif isinstance(data, dict) and "events" in data:
                         events = len(data.get("events", {}).get("data", []))
                         markets = len(data.get("markets", {}).get("data", []))
-                        print(f"   📊 Retrieved {events} events, {markets} markets")
+                        print(f"Retrieved {events} events, {markets} markets")
                 else:
                     error = result.get("error", "unknown")
-                    print(f"❌ Failed: {error}")
+                    print(f"Failed: {error}")
 
         except Exception as e:
-            print(f"❌ Natural language testing failed: {e}")
+            print(f"Natural language testing failed: {e}")
 
     async def test_direct_tools(self):
         """Test direct tool calls."""
-        print("\n🔧 TESTING: Direct Tool Calls")
+        print("\nTESTING: Direct Tool Calls")
         print("-" * 40)
 
         try:
             from agent.mcp_server import get_events, get_markets, search_polymarket_data
 
             # Test get_events
-            print("\n📅 Testing get_events(limit=3)...")
+            print("\nTesting get_events(limit=3)...")
             result = await get_events(limit=3)
             if result.get("success"):
                 count = len(result.get("data", {}).get("data", []))
-                print(f"✅ Success - Got {count} events")
+                print(f"Success - Got {count} events")
             else:
-                print(f"❌ Failed: {result.get('error')}")
+                print(f"Failed: {result.get('error')}")
 
             # Test get_markets
-            print("\n📈 Testing get_markets(limit=3)...")
+            print("\nTesting get_markets(limit=3)...")
             result = await get_markets(limit=3)
             if result.get("success"):
                 count = len(result.get("data", {}).get("data", []))
-                print(f"✅ Success - Got {count} markets")
+                print(f"Success - Got {count} markets")
             else:
-                print(f"❌ Failed: {result.get('error')}")
+                print(f"Failed: {result.get('error')}")
 
             # Test search
-            print("\n🔍 Testing search_polymarket_data('crypto')...")
+            print("\nTesting search_polymarket_data('crypto')...")
             result = await search_polymarket_data("crypto bitcoin", limit=2)
             if result.get("success"):
                 events_count = len(result.get("data", {}).get("events", {}).get("data", []))
                 markets_count = len(result.get("data", {}).get("markets", {}).get("data", []))
-                print(f"✅ Success - Found {events_count} events, {markets_count} markets")
+                print(f"Success - Found {events_count} events, {markets_count} markets")
             else:
-                print(f"❌ Failed: {result.get('error')}")
+                print(f"Failed: {result.get('error')}")
 
         except Exception as e:
-            print(f"❌ Direct tools testing failed: {e}")
+            print(f"Direct tools testing failed: {e}")
 
     async def test_resources(self):
         """Test MCP resources."""
-        print("\n📚 TESTING: MCP Resources")
+        print("\nTESTING: MCP Resources")
         print("-" * 40)
 
         try:
@@ -169,11 +160,11 @@ class MCPTestClient:
             ]
 
             for name, resource_func in resources:
-                print(f"\n📖 Reading {name}...")
+                print(f"\nReading {name}...")
                 try:
                     content = resource_func()
                     content_length = len(content) if content else 0
-                    print(f"✅ Success - {content_length} characters")
+                    print(f"Success - {content_length} characters")
 
                     # Show preview
                     if content and len(content) > 100:
@@ -181,15 +172,15 @@ class MCPTestClient:
                         print(f"   Preview: {preview}")
 
                 except Exception as e:
-                    print(f"❌ Failed to read {name}: {e}")
+                    print(f"Failed to read {name}: {e}")
 
         except Exception as e:
-            print(f"❌ Resources testing failed: {e}")
+            print(f"Resources testing failed: {e}")
 
     async def run_complete_test(self):
         """Run complete MCP test suite."""
         print("=" * 60)
-        print("🧪 COMPLETE MCP SERVER TEST")
+        print("COMPLETE MCP SERVER TEST")
         print("=" * 60)
         print("Testing your Polymarket MCP server")
         print(f"Server: {self.mcp_url}")
@@ -198,7 +189,7 @@ class MCPTestClient:
         try:
             # Step 1: Check server
             if not await self.check_server():
-                print("\n❌ Server not accessible. Start with: python main.py")
+                print("\nServer not accessible. Start with: python main.py")
                 return
 
             # Step 2: Test discovery
@@ -215,15 +206,15 @@ class MCPTestClient:
 
             # Summary
             print("\n" + "=" * 60)
-            print("🎉 ALL TESTS COMPLETE")
+            print("ALL TESTS COMPLETE")
             print("=" * 60)
-            print("✅ MCP server is working correctly")
-            print("✅ Tools are functional")
-            print("✅ Resources are accessible")
-            print("✅ Natural language processing works")
-            print("✅ Ready for other Torus agents to connect!")
+            print("MCP server is working correctly")
+            print("Tools are functional")
+            print("Resources are accessible")
+            print("Natural language processing works")
+            print("Ready for other Torus agents to connect!")
 
-            print("\n🌐 Other agents can connect at:")
+            print("\nOther agents can connect at:")
             print(f"   {self.mcp_url}")
 
         finally:

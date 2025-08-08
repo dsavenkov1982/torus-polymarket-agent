@@ -5,7 +5,7 @@ def test_events():
     response = requests.get(url)
     data = response.json()
     print("Fetched", len(data), "events")
-    print(data[:1])  # Preview the first event
+    print(data[:1])
 
 if __name__ == "__main__":
     test_events()

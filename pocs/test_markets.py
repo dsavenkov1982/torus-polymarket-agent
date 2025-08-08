@@ -5,7 +5,7 @@ def test_markets():
     response = requests.get(url)
     data = response.json()
     print("Fetched", len(data), "markets")
-    print(data[:1])  # Preview the first market
+    print(data[:1])
 
 if __name__ == "__main__":
     test_markets()

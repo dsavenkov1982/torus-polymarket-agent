@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-"""
-Tool to discover and test multiple Polymarket subgraphs
-"""
-
 import requests
 import json
 from datetime import datetime
@@ -32,8 +27,8 @@ class PolymarketSubgraphDiscovery:
     def test_subgraph_schema(self, subgraph_id: str, name: str = None):
         """Test what entities are available in a subgraph."""
         print(f"\n{'=' * 60}")
-        print(f"🔍 Testing Subgraph: {name or subgraph_id[:20]}...")
-        print(f"📋 ID: {subgraph_id}")
+        print(f"Testing Subgraph: {name or subgraph_id[:20]}...")
+        print(f"ID: {subgraph_id}")
         print(f"{'=' * 60}")
 
         url = self.get_subgraph_url(subgraph_id)
@@ -64,14 +59,14 @@ class PolymarketSubgraphDiscovery:
             data = response.json()
 
             if 'errors' in data:
-                print(f"❌ Errors: {data['errors']}")
+                print(f"Errors: {data['errors']}")
                 return None
 
             if 'data' in data and '__schema' in data['data']:
                 schema = data['data']['__schema']
                 query_fields = schema['queryType']['fields']
 
-                print(f"✅ Schema discovered! Found {len(query_fields)} query fields:")
+                print(f"Schema discovered! Found {len(query_fields)} query fields:")
 
                 # Categorize fields
                 entity_fields = []
@@ -84,13 +79,13 @@ class PolymarketSubgraphDiscovery:
                     elif not field_name.startswith('_'):
                         single_fields.append(field_name)
 
-                print(f"\n📊 Entity Collections (plural):")
+                print(f"\nEntity Collections (plural):")
                 for field in sorted(entity_fields)[:10]:  # Show first 10
-                    print(f"  📋 {field}")
+                    print(f"{field}")
 
-                print(f"\n🎯 Single Entities:")
+                print(f"\nSingle Entities:")
                 for field in sorted(single_fields)[:10]:  # Show first 10
-                    print(f"  📄 {field}")
+                    print(f"{field}")
 
                 return {
                     'entity_fields': entity_fields,
@@ -98,16 +93,16 @@ class PolymarketSubgraphDiscovery:
                     'total_fields': len(query_fields)
                 }
             else:
-                print("❌ No schema data found")
+                print("No schema data found")
                 return None
 
         except Exception as e:
-            print(f"❌ Error testing subgraph: {e}")
+            print(f"Error testing subgraph: {e}")
             return None
 
     def test_sample_data(self, subgraph_id: str, entity_name: str, name: str = None):
         """Test sample data from a specific entity."""
-        print(f"\n🧪 Testing Sample Data: {entity_name} from {name or 'subgraph'}")
+        print(f"\nTesting Sample Data: {entity_name} from {name or 'subgraph'}")
 
         url = self.get_subgraph_url(subgraph_id)
 
@@ -127,32 +122,32 @@ class PolymarketSubgraphDiscovery:
             data = response.json()
 
             if 'errors' in data:
-                print(f"❌ Errors: {data['errors']}")
+                print(f"Errors: {data['errors']}")
                 return None
 
             if 'data' in data and entity_name in data['data']:
                 entities = data['data'][entity_name]
-                print(f"✅ Found {len(entities)} {entity_name}")
+                print(f"Found {len(entities)} {entity_name}")
 
                 if entities:
-                    print(f"📋 Sample IDs:")
+                    print(f"Sample IDs:")
                     for i, entity in enumerate(entities, 1):
                         entity_id = entity.get('id', 'No ID')
                         print(f"  {i}. {entity_id}")
 
                 return entities
             else:
-                print(f"❌ No {entity_name} found")
+                print(f"No {entity_name} found")
                 return None
 
         except Exception as e:
-            print(f"❌ Error testing {entity_name}: {e}")
+            print(f"Error testing {entity_name}: {e}")
             return None
 
     def search_graph_network(self):
         """Search for Polymarket subgraphs using Graph Network API."""
         print(f"\n{'=' * 60}")
-        print("🔍 Searching Graph Network for Polymarket subgraphs...")
+        print("Searching Graph Network for Polymarket subgraphs...")
         print(f"{'=' * 60}")
 
         # The Graph Network API endpoint for searching subgraphs
@@ -192,12 +187,12 @@ class PolymarketSubgraphDiscovery:
             data = response.json()
 
             if 'errors' in data:
-                print(f"❌ Search errors: {data['errors']}")
+                print(f"Search errors: {data['errors']}")
                 return []
 
             if 'data' in data and 'subgraphSearch' in data['data']:
                 subgraphs = data['data']['subgraphSearch']
-                print(f"🎯 Found {len(subgraphs)} Polymarket-related subgraphs:")
+                print(f"Found {len(subgraphs)} Polymarket-related subgraphs:")
 
                 discovered_subgraphs = []
 
@@ -212,12 +207,12 @@ class PolymarketSubgraphDiscovery:
                     if subgraph.get('currentVersion') and subgraph['currentVersion'].get('subgraphDeployment'):
                         deployment_id = subgraph['currentVersion']['subgraphDeployment'].get('id')
 
-                    print(f"\n📊 #{i}: {name}")
-                    print(f"   📝 Description: {description}")
-                    print(f"   👤 Owner: {owner}")
-                    print(f"   🆔 Subgraph ID: {subgraph_id}")
+                    print(f"\n#{i}: {name}")
+                    print(f"Description: {description}")
+                    print(f"Owner: {owner}")
+                    print(f"Subgraph ID: {subgraph_id}")
                     if deployment_id:
-                        print(f"   🚀 Deployment ID: {deployment_id}")
+                        print(f"Deployment ID: {deployment_id}")
 
                     discovered_subgraphs.append({
                         'name': name,
@@ -229,17 +224,17 @@ class PolymarketSubgraphDiscovery:
 
                 return discovered_subgraphs
             else:
-                print("❌ No search results found")
+                print("No search results found")
                 return []
 
         except Exception as e:
-            print(f"❌ Error searching: {e}")
+            print(f"Error searching: {e}")
             return []
 
     def test_known_ids(self):
         """Test some common Polymarket subgraph ID patterns."""
         print(f"\n{'=' * 60}")
-        print("🔍 Testing Known/Common Polymarket Subgraph IDs...")
+        print("Testing Known/Common Polymarket Subgraph IDs...")
         print(f"{'=' * 60}")
 
         # These are educated guesses based on common patterns
@@ -272,13 +267,13 @@ class PolymarketSubgraphDiscovery:
 
     def comprehensive_discovery(self):
         """Run a comprehensive discovery of Polymarket subgraphs."""
-        print("🚀 Starting Comprehensive Polymarket Subgraph Discovery")
+        print("Starting Comprehensive Polymarket Subgraph Discovery")
         print("=" * 70)
 
         all_discovered = []
 
         # Method 1: Test known working subgraph
-        print("\n🎯 Step 1: Testing Known Working Subgraph")
+        print("\nStep 1: Testing Known Working Subgraph")
         main_schema = self.test_subgraph_schema(
             self.known_subgraphs["main"],
             "Main Polymarket (Known Working)"
@@ -292,11 +287,11 @@ class PolymarketSubgraphDiscovery:
             })
 
         # Method 2: Search the network
-        print("\n🎯 Step 2: Searching Graph Network")
+        print("\nStep 2: Searching Graph Network")
         network_results = self.search_graph_network()
 
         # Method 3: Test common ID patterns
-        print("\n🎯 Step 3: Testing Common ID Patterns")
+        print("\nStep 3: Testing Common ID Patterns")
         pattern_results = self.test_known_ids()
 
         # Combine results
@@ -304,22 +299,22 @@ class PolymarketSubgraphDiscovery:
 
         # Summary
         print(f"\n{'=' * 70}")
-        print("📊 DISCOVERY SUMMARY")
+        print("DISCOVERY SUMMARY")
         print(f"{'=' * 70}")
 
         working_count = len([s for s in all_discovered if s.get('status') == 'working' or s.get('schema')])
 
-        print(f"✅ Working subgraphs found: {working_count}")
-        print(f"🔍 Network search results: {len(network_results)}")
-        print(f"📋 Total discovered: {len(all_discovered)}")
+        print(f"Working subgraphs found: {working_count}")
+        print(f"Network search results: {len(network_results)}")
+        print(f"Total discovered: {len(all_discovered)}")
 
         if working_count > 0:
-            print(f"\n🎯 Working Subgraphs:")
+            print(f"\nWorking Subgraphs:")
             for subgraph in all_discovered:
                 if subgraph.get('schema'):
                     name = subgraph['name']
                     entity_count = len(subgraph['schema'].get('entity_fields', []))
-                    print(f"  ✅ {name}: {entity_count} entity types")
+                    print(f"{name}: {entity_count} entity types")
 
         return all_discovered
 
@@ -330,8 +325,8 @@ def main():
     # Use your API key
     api_key = "75d40427e4676b50425802db7503d97f"
 
-    print("🔍 Polymarket Subgraph Discovery Tool")
-    print(f"🔑 Using API key: {api_key[:10]}...")
+    print("Polymarket Subgraph Discovery Tool")
+    print(f"Using API key: {api_key[:10]}...")
 
     discoverer = PolymarketSubgraphDiscovery(api_key)
 
@@ -339,12 +334,12 @@ def main():
         results = discoverer.comprehensive_discovery()
 
         print(f"\n{'=' * 70}")
-        print("🎉 Discovery Complete!")
-        print("💡 Use the working subgraph IDs to get different types of data")
+        print("Discovery Complete!")
+        print("Use the working subgraph IDs to get different types of data")
         print(f"{'=' * 70}")
 
     except Exception as e:
-        print(f"\n❌ Discovery failed: {e}")
+        print(f"\nDiscovery failed: {e}")
 
 
 if __name__ == "__main__":

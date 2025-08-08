@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-Comprehensive Polymarket API diagnostic tool.
-Tests different parameters and endpoints to find current markets.
-"""
-
 import requests
 import json
 from datetime import datetime
@@ -41,18 +35,18 @@ class PolymarketDiagnostic:
             date_info = end_date
 
         return f"""
-📊 {question[:80]}{'...' if len(question) > 80 else ''}
-   📅 End Date: {date_info}
-   🔒 Closed: {closed} | 📦 Archived: {archived}
-   💰 24h Volume: ${volume_24h} | 💧 Liquidity: ${liquidity}
-   🆔 ID: {market.get('id', 'N/A')}
+ {question[:80]}{'...' if len(question) > 80 else ''}
+    End Date: {date_info}
+    Closed: {closed} | Archived: {archived}
+    24h Volume: ${volume_24h} | Liquidity: ${liquidity}
+    ID: {market.get('id', 'N/A')}
 """
 
     def test_endpoint(self, endpoint: str, params: Dict[str, Any] = None, description: str = "") -> Dict[str, Any]:
         """Test an API endpoint with given parameters."""
         try:
             url = f"{self.base_url}{endpoint}"
-            print(f"\n🔍 Testing: {description or endpoint}")
+            print(f"\n Testing: {description or endpoint}")
             print(f"   URL: {url}")
             print(f"   Params: {params or 'None'}")
 
@@ -64,23 +58,23 @@ class PolymarketDiagnostic:
                     data = response.json()
                     return {"success": True, "data": data, "url": response.url}
                 except json.JSONDecodeError:
-                    print(f"   ❌ Invalid JSON response")
+                    print(f"Invalid JSON response")
                     return {"success": False, "error": "Invalid JSON"}
             else:
-                print(f"   ❌ HTTP Error: {response.text[:200]}")
+                print(f"HTTP Error: {response.text[:200]}")
                 return {"success": False, "error": f"HTTP {response.status_code}", "text": response.text}
 
         except requests.exceptions.RequestException as e:
-            print(f"   ❌ Request failed: {e}")
+            print(f"Request failed: {e}")
             return {"success": False, "error": str(e)}
 
     def analyze_markets(self, markets: List[Dict], title: str):
         """Analyze and display market data."""
         if not markets:
-            print(f"\n📋 {title}: No markets found")
+            print(f"\n{title}: No markets found")
             return
 
-        print(f"\n📋 {title}: Found {len(markets)} markets")
+        print(f"\n{title}: Found {len(markets)} markets")
 
         # Analyze dates
         current_year = datetime.now().year
@@ -104,29 +98,29 @@ class PolymarketDiagnostic:
             else:
                 past_markets.append(market)
 
-        print(f"   📈 Future markets: {len(future_markets)}")
-        print(f"   📅 Current year markets: {len(current_markets)}")
-        print(f"   📜 Past markets: {len(past_markets)}")
+        print(f"Future markets: {len(future_markets)}")
+        print(f"Current year markets: {len(current_markets)}")
+        print(f"Past markets: {len(past_markets)}")
 
         # Show some examples
         if future_markets:
-            print(f"\n🔮 FUTURE MARKETS (showing first 3):")
+            print(f"\nFUTURE MARKETS (showing first 3):")
             for market in future_markets[:3]:
                 print(self.format_market(market))
 
         if current_markets:
-            print(f"\n📅 CURRENT YEAR MARKETS (showing first 3):")
+            print(f"\nCURRENT YEAR MARKETS (showing first 3):")
             for market in current_markets[:3]:
                 print(self.format_market(market))
 
         if past_markets and not (future_markets or current_markets):
-            print(f"\n📜 PAST MARKETS (showing first 3 - this is what we're trying to avoid):")
+            print(f"\nPAST MARKETS (showing first 3 - this is what we're trying to avoid):")
             for market in past_markets[:3]:
                 print(self.format_market(market))
 
     def run_comprehensive_test(self):
         """Run comprehensive tests to find current markets."""
-        print("🚀 Starting Polymarket API Comprehensive Test")
+        print("Starting Polymarket API Comprehensive Test")
         print("=" * 60)
 
         # Test 1: Default endpoint
@@ -205,7 +199,7 @@ class PolymarketDiagnostic:
                 self.analyze_markets(result["data"], f"CATEGORY: {description}")
 
         print("\n" + "=" * 60)
-        print("🏁 Diagnostic Complete!")
+        print("Diagnostic Complete!")
         print("\nIf you see mostly past markets, the API might be:")
         print("1. Returning historical data by default")
         print("2. Using different parameter names than expected")

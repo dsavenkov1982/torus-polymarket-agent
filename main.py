@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-Clean MCP server for Polymarket data.
-Runs as pure MCP server without any print statements or HTTP components.
-"""
-
 import logging
 import sys
 from agent.mcp_server import polymarket_mcp

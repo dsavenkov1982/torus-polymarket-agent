@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-HTTP API wrapper for Polymarket MCP Agent
-This exposes the MCP server functionality via REST API for Torus Network registration
-"""
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel

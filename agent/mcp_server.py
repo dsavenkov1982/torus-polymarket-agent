@@ -1,9 +1,3 @@
-# agent/mcp_server.py
-"""
-MCP server with tools and proper resources (content, not metadata).
-Fixed JSON formatting and encoding issues.
-"""
-
 import json
 from fastmcp import FastMCP
 from agent.data_fetcher import PolymarketService

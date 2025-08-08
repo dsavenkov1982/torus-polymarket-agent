@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-"""
-Complete Corrected Polymarket Graph API - combines both subgraphs with proper decimal handling
-"""
-
 import requests
 import json
 from datetime import datetime, timezone
@@ -27,7 +22,7 @@ class CompletePolymarketAPI:
 
     def print_separator(self, title: str):
         print("\n" + "=" * 70)
-        print(f"🧪 {title}")
+        print(f"{title}")
         print("=" * 70)
 
     def execute_query(self, query: str, url: str, variables: Dict = None) -> Optional[Dict]:
@@ -43,13 +38,13 @@ class CompletePolymarketAPI:
             data = response.json()
 
             if 'errors' in data:
-                print(f"❌ GraphQL errors: {data['errors']}")
+                print(f"GraphQL errors: {data['errors']}")
                 return None
 
             return data.get('data')
 
         except Exception as e:
-            print(f"❌ Request error: {e}")
+            print(f"Request error: {e}")
             return None
 
     def format_payout(self, payout_wei: str) -> float:
@@ -245,7 +240,7 @@ class CompletePolymarketAPI:
 
     def analyze_market_activity(self) -> Dict:
         """Comprehensive market activity analysis."""
-        print("🔍 Analyzing Polymarket Activity...")
+        print("Analyzing Polymarket Activity...")
 
         analysis = {
             'recent_markets': [],
@@ -256,15 +251,15 @@ class CompletePolymarketAPI:
         }
 
         # Get recent markets with questions
-        print("  📊 Fetching recent markets...")
+        print("Fetching recent markets...")
         analysis['recent_markets'] = self.get_market_questions(limit=5, min_volume=100)
 
         # Get biggest redemptions
-        print("  🏆 Fetching biggest wins...")
+        print("Fetching biggest wins...")
         analysis['big_winners'] = self.get_largest_redemptions(limit=5)
 
         # Get recent redemptions for activity analysis
-        print("  📈 Analyzing trading activity...")
+        print("Analyzing trading activity...")
         recent_redemptions = self.get_recent_redemptions(limit=50)
 
         if recent_redemptions:
@@ -280,7 +275,7 @@ class CompletePolymarketAPI:
             }
 
         # Get market conditions
-        print("  🎯 Fetching market conditions...")
+        print("Fetching market conditions...")
         analysis['market_conditions'] = self.get_conditions(limit=10)
 
         # Summary
@@ -316,7 +311,7 @@ class CompletePolymarketAPI:
 
 def main():
     """Demonstrate the complete corrected API."""
-    print("🚀 Complete Corrected Polymarket Graph API Demo")
+    print("Complete Corrected Polymarket Graph API Demo")
     print("=" * 70)
 
     # Use your API key
@@ -325,7 +320,7 @@ def main():
 
     try:
         # 1. Market Questions (from FixedProductMarketMakers)
-        print("\n🎯 1. Recent Market Questions")
+        print("\n1. Recent Market Questions")
         print("-" * 50)
         markets = api.get_market_questions(limit=3, min_volume=1000)
 
@@ -335,13 +330,13 @@ def main():
             volume = market.get('volumeUSD', 0)
             liquidity = market.get('liquidityUSD', 0)
 
-            print(f"📊 Market {i}: {question}...")
-            print(f"   🎯 Outcomes: {outcomes}")
-            print(f"   💰 Volume: ${volume:,.2f}")
-            print(f"   💧 Liquidity: ${liquidity:,.2f}")
+            print(f"Market {i}: {question}...")
+            print(f"Outcomes: {outcomes}")
+            print(f"Volume: ${volume:,.2f}")
+            print(f"Liquidity: ${liquidity:,.2f}")
 
         # 2. Biggest Winners (corrected payouts)
-        print(f"\n🏆 2. Biggest Recent Winners")
+        print(f"\n2. Biggest Recent Winners")
         print("-" * 50)
         big_winners = api.get_largest_redemptions(limit=5)
 
@@ -350,56 +345,56 @@ def main():
             date = winner.get('redeemedAt', 'Unknown')[:10]
             redeemer = winner.get('redeemer', '')[:10] + '...'
 
-            print(f"🥇 Winner {i}: ${payout:,.2f} to {redeemer} on {date}")
+            print(f"Winner {i}: ${payout:,.2f} to {redeemer} on {date}")
 
         # 3. Recent Trading Activity
-        print(f"\n📈 3. Recent Trading Activity")
+        print(f"\n3. Recent Trading Activity")
         print("-" * 50)
         recent_redemptions = api.get_recent_redemptions(limit=10)
 
         total_recent = sum(r.get('payoutUSD', 0) for r in recent_redemptions)
-        print(f"💰 Total recent payouts: ${total_recent:,.2f}")
-        print(f"📊 Recent redemptions: {len(recent_redemptions)}")
+        print(f"Total recent payouts: ${total_recent:,.2f}")
+        print(f"Recent redemptions: {len(recent_redemptions)}")
 
         if recent_redemptions:
-            print(f"🔥 Latest activity:")
+            print(f"Latest activity:")
             for redemption in recent_redemptions[:3]:
                 payout = redemption.get('payoutUSD', 0)
                 date = redemption.get('redeemedAt', 'Unknown')[:16]
                 print(f"  💎 ${payout:,.2f} on {date}")
 
         # 4. Crypto Markets Search
-        print(f"\n🪙 4. Crypto-Related Markets")
+        print(f"\n4. Crypto-Related Markets")
         print("-" * 50)
         crypto_markets = api.find_crypto_markets()
 
         for i, market in enumerate(crypto_markets[:3], 1):
             question = market.get('question', 'No question')[:60]
             volume = market.get('volumeUSD', 0)
-            print(f"🪙 Crypto {i}: {question}...")
-            print(f"   💰 Volume: ${volume:,.2f}")
+            print(f"Crypto {i}: {question}...")
+            print(f"Volume: ${volume:,.2f}")
 
         # 5. Complete Analysis
-        print(f"\n🔍 5. Complete Market Analysis")
+        print(f"\n5. Complete Market Analysis")
         print("-" * 50)
         analysis = api.analyze_market_activity()
 
         summary = analysis['summary']
-        print(f"📊 Active markets tracked: {summary['active_markets']}")
-        print(f"💰 Recent trading volume: ${summary['total_recent_volume']:,.2f}")
-        print(f"🏆 Biggest recent win: ${summary['biggest_win']:,.2f}")
-        print(f"🎯 Market conditions: {summary['tracked_conditions']}")
+        print(f"Active markets tracked: {summary['active_markets']}")
+        print(f"Recent trading volume: ${summary['total_recent_volume']:,.2f}")
+        print(f"Biggest recent win: ${summary['biggest_win']:,.2f}")
+        print(f"Market conditions: {summary['tracked_conditions']}")
 
-        print(f"\n✅ Complete API Integration Working!")
-        print("🎉 You now have:")
-        print("   📊 Market questions and outcomes")
-        print("   💰 Correct payout calculations")
-        print("   📈 Real trading activity data")
-        print("   🔍 Search and discovery features")
-        print("   🎯 Combined market intelligence")
+        print(f"\nComplete API Integration Working!")
+        print("You now have:")
+        print("Market questions and outcomes")
+        print("Correct payout calculations")
+        print("Real trading activity data")
+        print("Search and discovery features")
+        print("Combined market intelligence")
 
     except Exception as e:
-        print(f"\n❌ Demo failed: {e}")
+        print(f"\nDemo failed: {e}")
         import traceback
         traceback.print_exc()
 

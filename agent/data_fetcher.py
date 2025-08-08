@@ -1,9 +1,3 @@
-# agent/data_fetcher.py
-"""
-Fixed Polymarket service using the correct current APIs.
-Uses Gamma REST API and Goldsky GraphQL endpoints for real current market data.
-"""
-
 import httpx
 import asyncio
 import re
@@ -584,7 +578,7 @@ async def test_real_apis():
         markets_result = await service.fetch_markets(5)
         if markets_result.get('success') and markets_result['data']['data']:
             markets = markets_result['data']['data']
-            logger.info(f"✅ Found {len(markets)} real markets from Gamma API")
+            logger.info(f"Found {len(markets)} real markets from Gamma API")
 
             for market in markets[:2]:
                 question = market.get('question', 'No question')[:100]
@@ -592,17 +586,17 @@ async def test_real_apis():
                 status = market.get('status', 'unknown')
                 logger.info(f"  - {question}... (${volume:,.2f}, {status})")
         else:
-            logger.error(f"❌ Failed to fetch markets: {markets_result.get('error')}")
+            logger.error(f"Failed to fetch markets: {markets_result.get('error')}")
 
         # Test natural language query
         query_result = await service.process_natural_query("show me recent crypto markets")
         if query_result.get('success'):
             logger.info("✅ Natural language query processing works")
         else:
-            logger.error(f"❌ Natural query failed: {query_result.get('error')}")
+            logger.error(f"Natural query failed: {query_result.get('error')}")
 
     except Exception as e:
-        logger.error(f"❌ Test failed with exception: {e}")
+        logger.error(f"Test failed with exception: {e}")
     finally:
         await service.close()
 
