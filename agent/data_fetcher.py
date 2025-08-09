@@ -93,6 +93,57 @@ class PolymarketService:
                 **(query_info or {})
             }
 
+    def _filter_by_search_terms(self, response_data: Dict[str, Any], search_terms: List[str]) -> Dict[str, Any]:
+        """Filter response data by search terms."""
+        if not search_terms or not response_data.get('success'):
+            return response_data
+
+        try:
+            data = response_data.get('data', {})
+
+            if isinstance(data, dict) and 'data' in data:
+                items = data['data']
+            elif isinstance(data, list):
+                items = data
+            else:
+                return response_data
+
+            filtered_items = []
+            search_terms_lower = [term.lower() for term in search_terms]
+
+            for item in items:
+                if isinstance(item, dict):
+                    searchable_text = ""
+
+                    # Build searchable text from various fields
+                    if 'question' in item:
+                        searchable_text += item.get('question', '').lower() + " "
+                    if 'title' in item:
+                        searchable_text += item.get('title', '').lower() + " "
+                    if 'description' in item:
+                        searchable_text += item.get('description', '').lower() + " "
+
+                    # Check if any search term matches
+                    if any(term in searchable_text for term in search_terms_lower):
+                        filtered_items.append(item)
+
+            # Update the response with filtered data
+            if isinstance(data, dict) and 'data' in data:
+                filtered_response = response_data.copy()
+                filtered_response['data'] = data.copy()
+                filtered_response['data']['data'] = filtered_items
+                filtered_response['data']['count'] = len(filtered_items)
+                filtered_response['data']['search_applied'] = search_terms
+            else:
+                filtered_response = response_data.copy()
+                filtered_response['data'] = filtered_items
+
+            return filtered_response
+
+        except Exception as e:
+            logger.error(f"Error filtering by search terms: {e}")
+            return response_data
+
     async def _fetch_gamma_markets(self, limit: int = 20, **params) -> List[Dict]:
         """Fetch markets from Gamma REST API."""
         try:

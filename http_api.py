@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
 from pydantic import BaseModel
 import asyncio
 import uvicorn
@@ -139,31 +140,34 @@ async def crypto_markets_summary():
         return APIResponse(success=False, error=str(e))
 
 
+def load_resource(filename: str) -> str:
+    """Load content from a resource file"""
+    try:
+        # Get the directory where the current script is located
+        current_dir = Path(__file__).parent
+        resource_path = current_dir / "resources" / filename
+
+        # Check if file exists
+        if not resource_path.exists():
+            raise FileNotFoundError(f"Resource file not found: {filename}")
+
+        # Read and return file content
+        with open(resource_path, 'r', encoding='utf-8') as file:
+            return file.read()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading resource: {str(e)}")
+
+
 @app.get("/templates/analysis")
 async def get_analysis_template():
     """Get market analysis template"""
-    template = """
-# Polymarket Analysis Template
-
-## Market Overview
-- **Question**: [Market question]
-- **Current Price**: [Yes/No prices]
-- **Volume**: [24h trading volume]
-- **Liquidity**: [Available liquidity]
-
-## Analysis Factors
-1. **Fundamentals**: What drives this outcome?
-2. **Sentiment**: Public opinion and trends
-3. **Timeline**: Key dates and events
-4. **Risk Assessment**: Potential surprises
-
-## Decision Framework
-- **Probability Assessment**: [Your estimate]
-- **Market Efficiency**: Over/under valued?
-- **Position Size**: Risk management
-- **Exit Strategy**: When to close position
-"""
-    return APIResponse(success=True, data={"template": template})
+    try:
+        template_content = load_resource("analysis-template.md")
+        return APIResponse(success=True, data={"template": template_content})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load analysis template: {str(e)}")
 
 
 if __name__ == "__main__":
