@@ -93,8 +93,6 @@ class PolymarketService:
                 **(query_info or {})
             }
 
-    # ========== Gamma REST API Methods ==========
-
     async def _fetch_gamma_markets(self, limit: int = 20, **params) -> List[Dict]:
         """Fetch markets from Gamma REST API."""
         try:
@@ -157,8 +155,6 @@ class PolymarketService:
             logger.error(f"Error fetching market {slug}: {e}")
             return None
 
-    # ========== Goldsky GraphQL Methods ==========
-
     async def _execute_goldsky_query(self, query: str, url: str) -> Optional[Dict]:
         """Execute a GraphQL query against Goldsky endpoints."""
         payload = {"query": query}
@@ -204,8 +200,6 @@ class PolymarketService:
         if result and 'trades' in result:
             return result['trades']
         return []
-
-    # ========== Enhanced Market Processing ==========
 
     def _process_gamma_market(self, market: Dict) -> Dict:
         """Process and enhance market data from Gamma API."""
@@ -289,8 +283,6 @@ class PolymarketService:
         except Exception as e:
             logger.warning(f"Error processing event: {e}")
             return event
-
-    # ========== Core API Methods ==========
 
     async def fetch_markets(self, limit: int = 20, **filters) -> Dict[str, Any]:
         """Fetch real current markets from Gamma API."""
@@ -430,8 +422,6 @@ class PolymarketService:
                 "market_id": market_id
             })
 
-    # ========== Search Function for MCP ==========
-
     async def search_polymarket_data(self, search_terms: str, limit: int = 20) -> Dict[str, Any]:
         """Search both events and markets - for MCP compatibility."""
         try:
@@ -457,8 +447,6 @@ class PolymarketService:
                 "error": f"Search error: {str(e)}",
                 "search_terms": search_terms
             })
-
-    # ========== Natural Language Processing ==========
 
     async def process_natural_query(self, query: str) -> Dict[str, Any]:
         """Process natural language queries for real market data."""

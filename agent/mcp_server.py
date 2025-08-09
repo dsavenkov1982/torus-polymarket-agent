@@ -20,8 +20,6 @@ def safe_json_response(data: Any) -> Dict[str, Any]:
             "raw_data": str(data)[:500]  # Truncate if too long
         }
 
-# ========== MCP Tools ==========
-
 @polymarket_mcp.tool()
 async def query_polymarket(query: str) -> Dict[str, Any]:
     """
@@ -92,8 +90,6 @@ async def search_polymarket_data(search_terms: str, limit: int = 20) -> Dict[str
         return safe_json_response(response)
     except Exception as e:
         return safe_json_response({"success": False, "error": str(e)})
-
-# ========== MCP Resources (Proper Content) ==========
 
 @polymarket_mcp.resource("polymarket://market-analysis-template")
 def market_analysis_template():
