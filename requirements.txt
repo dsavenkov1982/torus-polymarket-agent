@@ -8,3 +8,5 @@ typing-extensions>=4.8.0
 gql
 aiohttp
 requests
+asyncpg
+loguru

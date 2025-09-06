@@ -1,23 +1,88 @@
+# docker-compose.yml
 version: '3.8'
 
 services:
-  polymarket-agent-api:
-    container_name: polymarket-agent-api
+  fastapi-app:
+    container_name: polymarket-api
     build:
-      context: .
+      context: ../
       dockerfile: Dockerfile
-    command: uvicorn http_api:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WORKERS:-1}
+    command: uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WORKERS:-2}
     environment:
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - PORT=${PORT:-8000}
-      - WORKERS=${WORKERS:-1}
-      - PYTHONPATH=/polymarket-agent
-      - PYTHONUNBUFFERED=1
+      - WORKERS=${WORKERS:-2}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:polymarket123@postgres:5432/polymarket_indexer}
+      - API_RATE_LIMIT=${API_RATE_LIMIT:-1000}
+      - POLYGON_RPC_URL=${POLYGON_RPC_URL:-https://polygon-rpc.com}
     ports:
       - "${PORT:-8000}:${PORT:-8000}"
+    depends_on:
+      - redis
+      - postgres
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+
+  polymarket-indexer:
+    container_name: polymarket-indexer
+    build:
+      context: ../
+      dockerfile: Dockerfile
+    command: >
+      bash -c "celery -A core.tasks.scheduler worker --beat -E --loglevel=info --concurrency=1"
+    depends_on:
+      - redis
+      - postgres
+    environment:
+      - POLYGON_RPC_URL=${POLYGON_RPC_URL:-https://polygon-rpc.com}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:polymarket123@postgres:5432/polymarket_indexer}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - INDEXER_INTERVAL_MINUTES=${INDEXER_INTERVAL_MINUTES:-5}
+      - START_BLOCK=${START_BLOCK:-50000000}
+      - BATCH_SIZE=${BATCH_SIZE:-100}
+      - TRIGGER_IMMEDIATE=${TRIGGER_IMMEDIATE:-true}
+      - CONDITIONAL_TOKENS_ADDRESS=${CONDITIONAL_TOKENS_ADDRESS:-0x4D97DCd97eC945f40cF65F87097ACe5EA0476045}
+      - CTF_EXCHANGE_ADDRESS=${CTF_EXCHANGE_ADDRESS:-0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E}
+      - NEG_RISK_ADAPTER_ADDRESS=${NEG_RISK_ADAPTER_ADDRESS:-0xC5d563A36AE78145C45a50134d48A1215220f80a}
+    restart: unless-stopped
+    volumes:
+      - ./logs:/logs
+
+  postgres:
+    container_name: postgres-polymarket
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-polymarket_indexer}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-polymarket123}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./ops/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    restart: unless-stopped
+    command: >
+      postgres -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.max=10000
+      -c pg_stat_statements.track=all
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+
+  redis:
+    image: redis:alpine
+    container_name: redis-polymarket
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+
+volumes:
+  postgres-data:
+    name: postgres-polymarket-data
+  redis-data:
+    name: redis-polymarket-data
