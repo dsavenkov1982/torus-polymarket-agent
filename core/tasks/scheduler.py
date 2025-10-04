@@ -8,7 +8,7 @@ import sys
 # Configure logging
 logger.remove()
 logger.add(
-    "../logs/polymarket_indexer.log",
+    "../logs/core.log",
     rotation="500 MB",
     format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}"
 )
@@ -28,7 +28,7 @@ if INDEXER_INTERVAL_MINUTES <= 0 or INDEXER_INTERVAL_MINUTES > 60:
 
 # Celery application instance
 scheduler_app = Celery(
-    'polymarket_indexer',
+    'core',
     broker=settings.REDIS_URL
 )
 

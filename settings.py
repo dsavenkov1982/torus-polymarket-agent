@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     # Database Configuration
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "postgresql://postgres:polymarket123@localhost:5432/polymarket_indexer"
+        "postgresql://postgres:polymarket123@localhost:5432/core"
     )
 
     # Redis Configuration
@@ -63,7 +63,7 @@ class Settings(BaseSettings):
 
     # Logging Configuration
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
-    LOG_FILE_PATH: str = os.getenv("LOG_FILE_PATH", "/logs/polymarket_indexer.log")
+    LOG_FILE_PATH: str = os.getenv("LOG_FILE_PATH", "/logs/core.log")
 
     # Performance Configuration
     CONNECTION_POOL_SIZE: int = int(os.getenv("CONNECTION_POOL_SIZE", "20"))

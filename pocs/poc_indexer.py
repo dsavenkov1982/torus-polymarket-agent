@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Complete Polymarket Indexer POC - Fully Working Version
-Run: python polymarket_indexer.py
+Run: python core.py
 
 Optional: pip install fastapi uvicorn (for web interface)
 """
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 class DatabaseManager:
-    def __init__(self, db_path: str = "polymarket_indexer.db"):
+    def __init__(self, db_path: str = "core.db"):
         self.db_path = db_path
         self.conn = None
         self._lock = threading.Lock()

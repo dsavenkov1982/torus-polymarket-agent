@@ -12,7 +12,7 @@ services:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - PORT=${PORT:-8000}
       - WORKERS=${WORKERS:-2}
-      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:polymarket123@postgres:5432/polymarket_indexer}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:polymarket123@postgres:5432/core}
       - API_RATE_LIMIT=${API_RATE_LIMIT:-1000}
       - POLYGON_RPC_URL=${POLYGON_RPC_URL:-https://polygon-rpc.com}
     ports:
@@ -34,7 +34,7 @@ services:
       - postgres
     environment:
       - POLYGON_RPC_URL=${POLYGON_RPC_URL:-https://polygon-rpc.com}
-      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:polymarket123@postgres:5432/polymarket_indexer}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:polymarket123@postgres:5432/core}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - INDEXER_INTERVAL_MINUTES=${INDEXER_INTERVAL_MINUTES:-5}
       - START_BLOCK=${START_BLOCK:-50000000}
@@ -53,7 +53,7 @@ services:
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_DB=${POSTGRES_DB:-polymarket_indexer}
+      - POSTGRES_DB=${POSTGRES_DB:-core}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-polymarket123}
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
