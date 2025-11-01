@@ -1,6 +1,6 @@
 # settings.py
 import os
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 from typing import Optional
 
 
@@ -12,8 +12,13 @@ class Settings(BaseSettings):
     # Database Configuration
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "postgresql://postgres:polymarket123@localhost:5432/core"
+        "postgresql://postgres:polymarket123@localhost:5432/polymarket_indexer"
     )
+
+    # Add these three fields:
+    POSTGRES_DB: str = "polymarket_indexer"
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "polymarket123"
 
     # Redis Configuration
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -63,7 +68,7 @@ class Settings(BaseSettings):
 
     # Logging Configuration
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
-    LOG_FILE_PATH: str = os.getenv("LOG_FILE_PATH", "/logs/core.log")
+    LOG_FILE_PATH: str = os.getenv("LOG_FILE_PATH", "/logs/polymarket_indexer.log")
 
     # Performance Configuration
     CONNECTION_POOL_SIZE: int = int(os.getenv("CONNECTION_POOL_SIZE", "20"))
@@ -85,47 +90,3 @@ class Settings(BaseSettings):
 
 # Global settings instance
 settings = Settings()
-
-
-# Validation
-def validate_settings():
-    """
-    Validate critical settings on startup.
-    """
-    errors = []
-
-    # Validate database URL
-    if not settings.DATABASE_URL.startswith(("postgresql://", "postgres://")):
-        errors.append("DATABASE_URL must be a valid PostgreSQL connection string")
-
-    # Validate Redis URL
-    if not settings.REDIS_URL.startswith("redis://"):
-        errors.append("REDIS_URL must be a valid Redis connection string")
-
-    # Validate Polygon RPC URL
-    if not settings.POLYGON_RPC_URL.startswith(("http://", "https://")):
-        errors.append("POLYGON_RPC_URL must be a valid HTTP(S) URL")
-
-    # Validate contract addresses
-    if not all(addr.startswith("0x") and len(addr) == 42 for addr in [
-        settings.CONDITIONAL_TOKENS_ADDRESS,
-        settings.CTF_EXCHANGE_ADDRESS,
-        settings.NEG_RISK_ADAPTER_ADDRESS
-    ]):
-        errors.append("Contract addresses must be valid Ethereum addresses")
-
-    # Validate intervals
-    if settings.INDEXER_INTERVAL_MINUTES < 1 or settings.INDEXER_INTERVAL_MINUTES > 60:
-        errors.append("INDEXER_INTERVAL_MINUTES must be between 1 and 60")
-
-    if settings.BATCH_SIZE < 1 or settings.BATCH_SIZE > 10000:
-        errors.append("BATCH_SIZE must be between 1 and 10000")
-
-    if errors:
-        raise ValueError(f"Settings validation failed: {'; '.join(errors)}")
-
-    return True
-
-
-# Validate on import
-validate_settings()

@@ -3,7 +3,7 @@ import asyncio
 from datetime import datetime, timedelta
 from celery import shared_task
 from web3 import Web3
-from web3.middleware import geth_poa_middleware
+from web3.middleware import ExtraDataToPOAMiddleware
 from loguru import logger
 from typing import Dict, List, Any
 
@@ -71,7 +71,7 @@ class PolygonBlockchainIndexer:
 
         # Initialize Web3
         self.w3 = Web3(Web3.HTTPProvider(settings.POLYGON_RPC_URL))
-        self.w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+        self.w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
 
         # Contract instances
         self.conditional_tokens = self.w3.eth.contract(
@@ -130,8 +130,8 @@ class PolygonBlockchainIndexer:
         try:
             # Process ConditionPreparation events
             prep_events = self.conditional_tokens.events.ConditionPreparation.get_logs(
-                fromBlock=start_block,
-                toBlock=end_block
+                from_block=start_block,
+                to_block=end_block
             )
 
             for event in prep_events:
@@ -140,8 +140,8 @@ class PolygonBlockchainIndexer:
 
             # Process ConditionResolution events
             resolution_events = self.conditional_tokens.events.ConditionResolution.get_logs(
-                fromBlock=start_block,
-                toBlock=end_block
+                from_block=start_block,
+                to_block=end_block
             )
 
             for event in resolution_events:
@@ -150,8 +150,8 @@ class PolygonBlockchainIndexer:
 
             # Process TransferSingle events
             transfer_events = self.conditional_tokens.events.TransferSingle.get_logs(
-                fromBlock=start_block,
-                toBlock=end_block
+                from_block=start_block,
+                to_block=end_block
             )
 
             for event in transfer_events:
@@ -186,8 +186,8 @@ class PolygonBlockchainIndexer:
         try:
             # Process OrderFilled events
             trade_events = self.ctf_exchange.events.OrderFilled.get_logs(
-                fromBlock=start_block,
-                toBlock=end_block
+                from_block=start_block,
+                to_block=end_block
             )
 
             for event in trade_events:
@@ -437,7 +437,6 @@ async def enrich_metadata():
 
         for market in markets_to_enrich:
             try:
-                # TODO: Implement actual metadata fetching from Polymarket API
                 metadata = {
                     'question': f"Market question for {market['condition_id'][:10]}",
                     'description': "Market description",

@@ -33,13 +33,18 @@ scheduler_app = Celery(
 )
 
 # Import tasks to register them with Celery
-from core.tasks.blockchain_indexer import run_polymarket_indexer, enrich_market_metadata, database_maintenance
+from core.tasks.hybrid_indexer import run_hybrid_indexer
+from core.tasks.blockchain_indexer import (
+    run_polymarket_indexer,  # Keep for manual/emergency blockchain-only runs
+    enrich_market_metadata,
+    database_maintenance
+)
 
 # Define the beat schedule
 scheduler_app.conf.beat_schedule = {
-    # Main blockchain indexing task - runs every few minutes
-    'index-polymarket-blockchain': {
-        'task': 'blockchain_indexer.run_polymarket_indexer',
+    # Main hybrid indexing task (Blockchain + CLOB) - runs every few minutes
+    'index-polymarket-hybrid': {
+        'task': 'hybrid_indexer.run_hybrid_indexer',
         'schedule': crontab(minute=f'*/{INDEXER_INTERVAL_MINUTES}'),
     },
 
@@ -60,32 +65,33 @@ scheduler_app.conf.beat_schedule = {
 scheduler_app.conf.timezone = 'UTC'
 scheduler_app.conf.broker_connection_retry_on_startup = True
 scheduler_app.conf.worker_proc_alive_timeout = 300  # 5 minutes for blockchain calls
-scheduler_app.conf.task_soft_time_limit = 600  # 10 minutes soft limit
-scheduler_app.conf.task_time_limit = 900  # 15 minutes hard limit
+scheduler_app.conf.task_soft_time_limit = 900  # 15 minutes soft limit (increased for hybrid)
+scheduler_app.conf.task_time_limit = 1200  # 20 minutes hard limit (increased for hybrid)
 scheduler_app.conf.worker_prefetch_multiplier = 1  # Process one task at a time
 scheduler_app.conf.task_acks_late = True
 scheduler_app.conf.worker_disable_rate_limits = True
 
 # Task routing (optional - for scaling)
 scheduler_app.conf.task_routes = {
-    'blockchain_indexer.run_polymarket_indexer': {'queue': 'indexer'},
+    'hybrid_indexer.run_hybrid_indexer': {'queue': 'indexer'},
     'blockchain_indexer.enrich_market_metadata': {'queue': 'metadata'},
     'blockchain_indexer.database_maintenance': {'queue': 'maintenance'},
 }
 
 # Trigger immediate execution if the environment variable is set
 if settings.TRIGGER_IMMEDIATE:
-    logger.info("Triggering immediate execution of blockchain indexer task.")
+    logger.info("Triggering immediate execution of hybrid indexer task.")
     try:
-        scheduler_app.send_task('blockchain_indexer.run_polymarket_indexer')
-        logger.info("Immediate indexer task triggered successfully")
+        scheduler_app.send_task('hybrid_indexer.run_hybrid_indexer')
+        logger.info("Immediate hybrid indexer task triggered successfully")
     except Exception as e:
         logger.error(f"Failed to trigger immediate task: {e}")
 
 # Allow manual execution outside Docker
 if __name__ == '__main__':
-    logger.info("Starting Celery scheduler for Polymarket indexer")
+    logger.info("Starting Celery scheduler for Polymarket hybrid indexer")
     logger.info(f"Indexing interval: every {INDEXER_INTERVAL_MINUTES} minutes")
+    logger.info(f"Hybrid indexing: Blockchain + CLOB API data")
     logger.info(f"Redis broker: {settings.REDIS_URL}")
 
     # Start Celery with beat scheduler
@@ -93,6 +99,6 @@ if __name__ == '__main__':
         'worker',
         '-B',  # Enable beat scheduler
         '--loglevel=info',
-        '--concurrency=2',  # Low concurrency for blockchain indexing
+        '--concurrency=2',  # Low concurrency for blockchain + API indexing
         '--queues=indexer,metadata,maintenance'
     ])
